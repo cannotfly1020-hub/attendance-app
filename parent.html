@@ -57,6 +57,9 @@
       </div>
     </section>
 
+    <!-- 直近の練習予定・休講案内 -->
+    <section id="upcomingNotice" class="hidden" aria-live="polite"></section>
+
     <!-- 向こう2週間の練習日・出欠予定 -->
     <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -77,10 +80,11 @@
       <div class="flex justify-between items-center border-b pb-2">
         <div>
           <h3 id="modalDateTitle" class="font-bold text-slate-800 text-sm sm:text-base">出欠登録</h3>
-          <div id="modalScheduleNotice" class="text-xs text-indigo-600 font-semibold mt-0.5 hidden"></div>
         </div>
         <button id="closeModalBtn" class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">&times;</button>
       </div>
+
+      <div id="modalScheduleNotice" class="hidden rounded-xl border-2 p-3 text-sm leading-relaxed"></div>
 
       <div class="grid grid-cols-2 gap-3">
         <button type="button" data-val="出席" class="status-choice-btn py-3 border-2 border-emerald-500 text-emerald-700 rounded-xl font-bold flex flex-col items-center justify-center hover:bg-emerald-50">
@@ -193,6 +197,29 @@
       return value;
     }
 
+    function normalizeDateKey(val) {
+      if (!val) return '';
+      const s = String(val).trim().replace(/\//g, '-');
+      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) {
+        return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+      }
+      return s;
+    }
+
+    function rememberSchedule(schedules, key, item, fromNote) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+      const date = normalizeDateKey(item.date || key);
+      if (!date) return;
+      const description = String((fromNote ? (item.note || item.description) : (item.description || '')) || '').trim();
+      schedules[date] = {
+        date: date,
+        status: item.status || '通常練習',
+        isOff: item.status === '休み' || item.isOff === true,
+        description: description
+      };
+    }
+
     function applyGasData(json) {
       const data = json.data && typeof json.data === 'object' && !Array.isArray(json.data) ? json.data : {};
       const attendanceRaw = data.attendance || data;
@@ -200,21 +227,19 @@
       const attendance = {};
       const schedules = {};
 
+      Object.entries(asRecordMap(schedulesRaw)).forEach(([key, item]) => {
+        rememberSchedule(schedules, key, item, false);
+      });
+
       Object.entries(asRecordMap(attendanceRaw)).forEach(([key, item]) => {
         if (key === 'attendance' || key === 'schedules') return;
         if (!item || typeof item !== 'object' || Array.isArray(item) || !item.name) return;
-        if (item.name === '【練習予定】' || item.source === 'schedule') return;
-        attendance[key] = item;
-      });
-
-      Object.entries(asRecordMap(schedulesRaw)).forEach(([key, item]) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-        const date = item.date || key;
-        schedules[date] = {
-          date: date,
-          status: item.status || '通常練習',
-          description: item.description || ''
-        };
+        const date = normalizeDateKey(item.date);
+        if (item.name === '【練習予定】' || item.source === 'schedule') {
+          if (date && !schedules[date]) rememberSchedule(schedules, key, item, true);
+          return;
+        }
+        attendance[key] = date ? { ...item, date: date } : item;
       });
 
       return { attendance, schedules };
@@ -227,6 +252,7 @@
         attendanceMap = split.attendance;
         schedulesMap = split.schedules;
         renderNameChips();
+        renderUpcomingNotice();
         renderList();
       } catch (err) {
         if (notify) showToast(err.message, true);
@@ -235,6 +261,14 @@
 
     function normalizeName(name) {
       return (name || '').replace(/[\s\u3000]+/g, '').trim();
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
     function formatDate(d) {
@@ -264,15 +298,78 @@
       setTimeout(() => toast.remove(), isError ? 8000 : 3500);
     }
 
+    function isPracticeOff(schedule) {
+      return !!(schedule && (schedule.status === '休み' || schedule.isOff));
+    }
+
+    function getSchedule(dateStr) {
+      return schedulesMap[normalizeDateKey(dateStr)] || null;
+    }
+
     function findAttendance(normKey, dateStr) {
-      if (!normKey) return null;
-      const direct = attendanceMap[`${normKey}_${dateStr}`];
+      const target = normalizeDateKey(dateStr);
+      if (!normKey || !target) return null;
+      const direct = attendanceMap[`${normKey}_${target}`];
       if (direct) return direct;
       return Object.values(attendanceMap).find(item => {
-        if (!item || item.date !== dateStr) return false;
+        if (!item || normalizeDateKey(item.date) !== target) return false;
         const itemNorm = item.normalizedName || normalizeName(item.name);
         return itemNorm === normKey;
       }) || null;
+    }
+
+    function renderUpcomingNotice() {
+      const el = document.getElementById('upcomingNotice');
+      const picks = [];
+      for (let offset = 0; offset < 2; offset++) {
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        const dateStr = formatDate(d);
+        const schedule = getSchedule(dateStr);
+        if (!schedule) continue;
+        const off = isPracticeOff(schedule);
+        const description = (schedule.description || '').trim();
+        if (!off && !description) continue;
+        picks.push({
+          label: offset === 0 ? '今日' : '明日',
+          dateStr: dateStr,
+          off: off,
+          description: description
+        });
+      }
+
+      el.replaceChildren();
+      if (picks.length === 0) {
+        el.className = 'hidden';
+        return;
+      }
+
+      const hasOff = picks.some(pick => pick.off);
+      el.className = `p-4 rounded-2xl border-2 shadow-sm space-y-3 ${
+        hasOff ? 'bg-rose-100 border-rose-400 text-rose-950' : 'bg-blue-50 border-blue-300 text-blue-950'
+      }`;
+
+      const heading = document.createElement('div');
+      heading.className = 'text-sm sm:text-base font-black';
+      heading.textContent = hasOff ? '直近の練習予定・休講案内' : '直近の練習内容・持ち物';
+      el.appendChild(heading);
+
+      picks.forEach(pick => {
+        const block = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'text-sm font-black leading-snug';
+        title.textContent = pick.off
+          ? `🚫 ${pick.label}（${pick.dateStr}）は休講です`
+          : `📢 ${pick.label}（${pick.dateStr}）の連絡`;
+        block.appendChild(title);
+        if (pick.description) {
+          const body = document.createElement('div');
+          body.className = 'text-sm font-bold mt-1 leading-relaxed break-words';
+          body.textContent = pick.description;
+          block.appendChild(body);
+        }
+        el.appendChild(block);
+      });
     }
 
     function renderNameChips() {
@@ -306,6 +403,7 @@
         chip.onclick = () => {
           document.getElementById('studentNameInput').value = name;
           localStorage.setItem(STORAGE_KEY_NAME, name);
+          renderUpcomingNotice();
           renderList();
         };
         chipsList.appendChild(chip);
@@ -334,18 +432,18 @@
 
       days.forEach(day => {
         const record = findAttendance(normKey, day.dateStr);
-        const schedule = schedulesMap[day.dateStr];
-        const isOff = schedule && schedule.status === '休み';
+        const schedule = getSchedule(day.dateStr);
+        const isOff = isPracticeOff(schedule);
 
         const row = document.createElement('div');
-        row.className = `p-3.5 flex items-center justify-between transition cursor-pointer ${
-          isOff ? 'bg-rose-50/40 hover:bg-rose-50' : 'hover:bg-slate-50'
+        row.className = `p-3.5 flex items-center justify-between gap-3 transition cursor-pointer ${
+          isOff ? 'bg-rose-50 hover:bg-rose-100/70' : 'hover:bg-slate-50'
         }`;
         row.onclick = () => openModal(day.dateStr, record, schedule);
 
         let statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-400 font-bold">未登録</span>';
         if (isOff) {
-          statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 font-bold border border-rose-200">🚫 練習休み</span>';
+          statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-rose-200 text-rose-950 font-black border border-rose-400 whitespace-nowrap">🚫 休講（練習休み）</span>';
         } else if (record) {
           if (record.status === '出席') {
             statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">⭕ 出席</span>';
@@ -357,8 +455,13 @@
         const dayColor = day.isSunday ? 'text-rose-600 font-bold' : (day.isSaturday ? 'text-blue-600 font-bold' : 'text-slate-800');
 
         let descLine = '';
-        if (schedule && schedule.description) {
-          descLine = `<div class="text-xs ${isOff ? 'text-rose-600' : 'text-indigo-600'} font-semibold mt-0.5 truncate max-w-xs">📌 ${schedule.description}</div>`;
+        if (isOff) {
+          const reason = schedule.description
+            ? escapeHtml(schedule.description)
+            : 'この日は練習がありません';
+          descLine = `<div class="text-sm font-bold text-rose-950 mt-1 leading-relaxed break-words">${reason}</div>`;
+        } else if (schedule && schedule.description) {
+          descLine = `<div class="text-xs sm:text-sm text-indigo-600 font-semibold mt-1 leading-relaxed break-words">📌 練習内容・持参物: ${escapeHtml(schedule.description)}</div>`;
         }
 
         let sourceBadge = '';
@@ -396,14 +499,29 @@
       document.getElementById('modalDateTitle').textContent = `${dateStr} の出欠登録`;
 
       const notice = document.getElementById('modalScheduleNotice');
-      if (schedule && schedule.status === '休み') {
-        notice.textContent = `※ この日は練習休みの予定です (${schedule.description || '休講'})`;
-        notice.classList.remove('hidden');
+      notice.replaceChildren();
+      if (isPracticeOff(schedule)) {
+        notice.className = 'rounded-xl border-2 border-rose-400 bg-rose-100 text-rose-950 p-3';
+        const heading = document.createElement('div');
+        heading.className = 'font-black text-sm sm:text-base';
+        heading.textContent = 'この日は休講日です';
+        notice.appendChild(heading);
+        const body = document.createElement('div');
+        body.className = 'text-sm font-bold mt-1 leading-relaxed break-words';
+        body.textContent = (schedule && schedule.description) ? schedule.description : '練習休みのため、出欠の登録は不要です。';
+        notice.appendChild(body);
       } else if (schedule && schedule.description) {
-        notice.textContent = `連絡事項: ${schedule.description}`;
-        notice.classList.remove('hidden');
+        notice.className = 'rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-950 p-3';
+        const heading = document.createElement('div');
+        heading.className = 'font-black text-sm';
+        heading.textContent = '練習内容・持参物';
+        notice.appendChild(heading);
+        const body = document.createElement('div');
+        body.className = 'text-sm font-bold mt-1 leading-relaxed break-words';
+        body.textContent = schedule.description;
+        notice.appendChild(body);
       } else {
-        notice.classList.add('hidden');
+        notice.className = 'hidden';
       }
 
       selectedStatus = currentRecord ? currentRecord.status : '出席';
