@@ -142,36 +142,44 @@
       return json;
     }
 
-    function applyGasData(json) {
-      const data = json.data && typeof json.data === 'object' ? json.data : {};
-      const nested = Object.prototype.hasOwnProperty.call(data, 'attendance')
-        || Object.prototype.hasOwnProperty.call(data, 'schedules');
-      if (nested) {
-        return {
-          attendance: data.attendance && typeof data.attendance === 'object' ? data.attendance : {},
-          schedules: data.schedules && typeof data.schedules === 'object' ? data.schedules : {}
-        };
+    function asRecordMap(value) {
+      if (!value || typeof value !== 'object') return {};
+      if (Array.isArray(value)) {
+        const map = {};
+        value.forEach(item => {
+          if (!item || typeof item !== 'object') return;
+          const key = item.date || item.id;
+          if (key) map[key] = item;
+        });
+        return map;
       }
+      return value;
+    }
+
+    function applyGasData(json) {
+      const data = json.data && typeof json.data === 'object' && !Array.isArray(json.data) ? json.data : {};
+      const attendanceRaw = data.attendance || data;
+      const schedulesRaw = data.schedules || json.schedules || {};
       const attendance = {};
       const schedules = {};
-      Object.entries(data).forEach(([key, item]) => {
-        if (!item || typeof item !== 'object') return;
-        if (item.source === 'schedule') {
-          schedules[item.date || key] = {
-            date: item.date || key,
-            status: item.status || '通常練習',
-            description: item.description || item.note || ''
-          };
-        } else if (item.name) {
-          attendance[key] = item;
-        } else if (item.date || item.status || item.description) {
-          schedules[item.date || key] = {
-            date: item.date || key,
-            status: item.status || '通常練習',
-            description: item.description || item.note || ''
-          };
-        }
+
+      Object.entries(asRecordMap(attendanceRaw)).forEach(([key, item]) => {
+        if (key === 'attendance' || key === 'schedules') return;
+        if (!item || typeof item !== 'object' || Array.isArray(item) || !item.name) return;
+        if (item.name === '【練習予定】' || item.source === 'schedule') return;
+        attendance[key] = item;
       });
+
+      Object.entries(asRecordMap(schedulesRaw)).forEach(([key, item]) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+        const date = item.date || key;
+        schedules[date] = {
+          date: date,
+          status: item.status || '通常練習',
+          description: item.description || ''
+        };
+      });
+
       return { attendance, schedules };
     }
 
