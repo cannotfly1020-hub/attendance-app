@@ -69,26 +69,128 @@
 
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'sports-attendance-app';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-      apiKey: "mock-key",
-      authDomain: "mock.firebaseapp.com",
-      projectId: "mock-project"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-
+  <script>
+    const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyYMq101RZjOAcaUUO4rPIY_kBvPKFKfaww3VjolCXYkHEODCkPtvu5g3qywS82sBjOIA/exec';
+    const GAS_HINT = 'CORSエラーまたはGASの公開設定（全員）を確認してください';
     const STORAGE_KEY_STUDENT = 'sports_app_student_kid';
-    let authUser = null;
+
+    let attendanceMap = {};
     let schedulesMap = {};
     let studentTargetDate = '';
+
+    function logGasError(url, payload, status, responseText, error) {
+      console.error('[GAS] 通信エラー', {
+        url,
+        payload: payload ?? null,
+        status: status ?? null,
+        responseText: responseText ?? '',
+        error: error || null
+      });
+    }
+
+    function gasError(message, url, payload, status, responseText, cause) {
+      logGasError(url, payload, status, responseText, cause);
+      const err = new Error(message);
+      if (cause) err.cause = cause;
+      return err;
+    }
+
+    async function gasFetch(method, payload) {
+      const isGet = method === 'GET';
+      const url = isGet ? `${GAS_ENDPOINT}?t=${Date.now()}` : GAS_ENDPOINT;
+      // Content-Type は付けない。text/plain 扱いにして OPTIONS プリフライトを避ける。
+      const options = isGet
+        ? { method: 'GET', redirect: 'follow', cache: 'no-store' }
+        : { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) };
+
+      let res;
+      try {
+        res = await fetch(url, options);
+      } catch (cause) {
+        throw gasError(`通信に失敗しました。${GAS_HINT}`, url, isGet ? null : payload, null, '', cause);
+      }
+
+      let responseText = '';
+      try {
+        responseText = await res.text();
+      } catch (cause) {
+        throw gasError(`応答を読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, '', cause);
+      }
+
+      const trimmed = responseText.trim();
+      const isHtml = /^</.test(trimmed) || /<!doctype|<html|accounts\.google\.com|ServiceLogin/i.test(trimmed);
+      if (!res.ok || !trimmed || isHtml) {
+        const login = /accounts\.google\.com|ServiceLogin|sign in - google|ログイン/i.test(responseText);
+        const message = login
+          ? `Googleのログイン画面が返されました。${GAS_HINT}`
+          : `サーバーがJSON以外を返しました（HTTP ${res.status}）。${GAS_HINT}`;
+        throw gasError(message, url, isGet ? null : payload, res.status, responseText);
+      }
+
+      let json;
+      try {
+        json = JSON.parse(trimmed);
+      } catch (cause) {
+        throw gasError(`応答をJSONとして読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, responseText, cause);
+      }
+
+      if (!json || json.status !== 'success') {
+        const serverMessage = (json && json.message) ? String(json.message) : '処理に失敗しました。';
+        throw gasError(serverMessage, url, isGet ? null : payload, res.status, responseText);
+      }
+
+      return json;
+    }
+
+    function applyGasData(json) {
+      const data = json.data && typeof json.data === 'object' ? json.data : {};
+      const nested = Object.prototype.hasOwnProperty.call(data, 'attendance')
+        || Object.prototype.hasOwnProperty.call(data, 'schedules');
+      if (nested) {
+        return {
+          attendance: data.attendance && typeof data.attendance === 'object' ? data.attendance : {},
+          schedules: data.schedules && typeof data.schedules === 'object' ? data.schedules : {}
+        };
+      }
+      const attendance = {};
+      const schedules = {};
+      Object.entries(data).forEach(([key, item]) => {
+        if (!item || typeof item !== 'object') return;
+        if (item.source === 'schedule') {
+          schedules[item.date || key] = {
+            date: item.date || key,
+            status: item.status || '通常練習',
+            description: item.description || item.note || ''
+          };
+        } else if (item.name) {
+          attendance[key] = item;
+        } else if (item.date || item.status || item.description) {
+          schedules[item.date || key] = {
+            date: item.date || key,
+            status: item.status || '通常練習',
+            description: item.description || item.note || ''
+          };
+        }
+      });
+      return { attendance, schedules };
+    }
+
+    async function loadData(notify = false) {
+      try {
+        const json = await gasFetch('GET');
+        const split = applyGasData(json);
+        attendanceMap = split.attendance;
+        schedulesMap = split.schedules;
+        renderNameSuggestions();
+        renderScheduleBanner();
+      } catch (err) {
+        if (notify) {
+          const alertBox = document.getElementById('studentResultAlert');
+          alertBox.className = 'p-4 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
+          alertBox.textContent = err.message;
+        }
+      }
+    }
 
     function formatDate(d) {
       const year = d.getFullYear();
@@ -164,6 +266,28 @@
       }
     }
 
+    function renderNameSuggestions() {
+      const dl = document.getElementById('studentNameSuggestions');
+      dl.innerHTML = '';
+      const names = new Set();
+      Object.values(attendanceMap).forEach(item => {
+        if (item && item.name) names.add(item.name);
+      });
+      names.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        dl.appendChild(opt);
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     async function handleStudentSubmit(status) {
       const nameInput = document.getElementById('studentNameInput');
       const name = nameInput.value.trim();
@@ -182,71 +306,26 @@
       attendBtn.disabled = true;
       absentBtn.disabled = true;
 
+      const payload = {
+        type: 'attendance',
+        name: name,
+        date: studentTargetDate,
+        status: status,
+        note: '',
+        source: 'student'
+      };
+
       try {
-        const normName = normalizeName(name);
-        const docId = `${normName}_${studentTargetDate}`;
-        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'attendance', docId);
-
-        await setDoc(ref, {
-          name: name,
-          normalizedName: normName,
-          date: studentTargetDate,
-          status: status,
-          note: '',
-          source: 'student',
-          updatedAt: new Date().toISOString()
-        });
-
+        await gasFetch('POST', payload);
         alertBox.className = 'p-4 rounded-xl text-center font-black text-sm bg-emerald-100 text-emerald-800 block';
-        alertBox.innerHTML = `✅ <b>${name}さん</b>、${studentTargetDate} の出欠を【${status}】でおくりました！`;
+        alertBox.innerHTML = `✅ <b>${escapeHtml(name)}さん</b>、${studentTargetDate} の出欠を【${escapeHtml(status)}】でおくりました！`;
+        await loadData(false);
       } catch (err) {
         alertBox.className = 'p-4 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
-        alertBox.innerHTML = `⚠️ おくれませんでした: ${err.message}`;
+        alertBox.textContent = `⚠️ おくれませんでした。${err.message}`;
       } finally {
         attendBtn.disabled = false;
         absentBtn.disabled = false;
-      }
-    }
-
-    async function init() {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-        authUser = auth.currentUser;
-
-        // 練習予定のリアルタイム監視
-        const schCol = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
-        onSnapshot(schCol, (snapshot) => {
-          const map = {};
-          snapshot.forEach(docSnap => {
-            map[docSnap.id] = docSnap.data();
-          });
-          schedulesMap = map;
-          renderScheduleBanner();
-        });
-
-        // 過去の生徒名サジェスト取得
-        const attCol = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
-        onSnapshot(attCol, (snapshot) => {
-          const dl = document.getElementById('studentNameSuggestions');
-          dl.innerHTML = '';
-          const names = new Set();
-          snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            if (data.name) names.add(data.name);
-          });
-          names.forEach(n => {
-            const opt = document.createElement('option');
-            opt.value = n;
-            dl.appendChild(opt);
-          });
-        });
-
-      } catch (err) {
-        console.error('初期化エラー:', err);
       }
     }
 
@@ -258,7 +337,11 @@
       document.getElementById('studentAttendBtn').addEventListener('click', () => handleStudentSubmit('出席'));
       document.getElementById('studentAbsentBtn').addEventListener('click', () => handleStudentSubmit('欠席'));
 
-      init();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') loadData(false);
+      });
+
+      loadData(true);
     });
   </script>
 </body>
