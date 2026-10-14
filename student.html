@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>【生徒用】れんしゅう出欠チェック</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-amber-50 text-slate-800 min-h-screen flex flex-col justify-between p-4 font-sans">
+
+  <div class="max-w-md w-full mx-auto space-y-4 pt-2">
+
+    <!-- タイトル -->
+    <div class="text-center">
+      <h1 class="text-2xl font-black text-amber-900 tracking-wide flex items-center justify-center gap-2">
+        <span>🏃‍♂️</span> <span>れんしゅう出欠チェック</span>
+      </h1>
+      <p class="text-xs text-amber-700 font-semibold mt-1">なまえをいれて、ボタンをおしてね！</p>
+    </div>
+
+    <!-- お名前入力 -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-amber-200 space-y-1.5">
+      <label class="block text-xs font-bold text-slate-500">なまえ（フルネーム）</label>
+      <input type="text" id="studentNameInput" list="studentNameSuggestions" placeholder="例: つもり けんしん" 
+        class="w-full text-base sm:text-lg font-black border-2 border-amber-300 rounded-xl px-3 py-2.5 focus:outline-none focus:border-amber-500 bg-amber-50/20">
+      <datalist id="studentNameSuggestions"></datalist>
+      <div class="text-[11px] text-slate-400">※ お父さん・お母さんと同じ書き方にしてね</div>
+    </div>
+
+    <!-- いつの練習か選択 -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-amber-200 space-y-2">
+      <label class="block text-xs font-bold text-slate-500">いつのれんしゅう？</label>
+      <div id="studentDateButtons" class="grid grid-cols-2 gap-2"></div>
+    </div>
+
+    <!-- 先生からのお知らせ・練習内容カード -->
+    <div id="studentScheduleBanner" class="hidden p-4 rounded-2xl border-2 transition-all shadow-sm">
+      <div id="studentScheduleTitle" class="font-black text-sm"></div>
+      <div id="studentScheduleBody" class="text-xs mt-1 leading-relaxed"></div>
+    </div>
+
+    <!-- でる / やすむ ボタンエリア -->
+    <div class="grid grid-cols-2 gap-4 pt-1">
+      <button type="button" id="studentAttendBtn" class="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white p-5 rounded-2xl shadow-md border-b-4 border-emerald-700 flex flex-col items-center justify-center gap-1 transition">
+        <span class="text-4xl">⭕</span>
+        <span class="text-lg sm:text-xl font-black">いく（出席）</span>
+      </button>
+
+      <button type="button" id="studentAbsentBtn" class="bg-rose-500 hover:bg-rose-600 active:scale-95 text-white p-5 rounded-2xl shadow-md border-b-4 border-rose-700 flex flex-col items-center justify-center gap-1 transition">
+        <span class="text-4xl">❌</span>
+        <span class="text-lg sm:text-xl font-black">やすむ（欠席）</span>
+      </button>
+    </div>
+
+    <!-- 送信結果フィードバック -->
+    <div id="studentResultAlert" class="hidden p-4 rounded-xl text-center font-bold text-sm shadow-sm transition"></div>
+
+    <div class="text-center text-xs text-amber-700/70 pt-2 font-medium">
+      ※ まちがえておくっても、お父さん・お母さんが後から直せます
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'sports-attendance-app';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+      apiKey: "mock-key",
+      authDomain: "mock.firebaseapp.com",
+      projectId: "mock-project"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const STORAGE_KEY_STUDENT = 'sports_app_student_kid';
+    let authUser = null;
+    let schedulesMap = {};
+    let studentTargetDate = '';
+
+    function formatDate(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function normalizeName(name) {
+      return (name || '').replace(/[\s\u3000]+/g, '').trim();
+    }
+
+    function initDates() {
+      const container = document.getElementById('studentDateButtons');
+      const days = [
+        { label: 'きょう', offset: 0 },
+        { label: 'あした', offset: 1 }
+      ];
+
+      container.innerHTML = '';
+      days.forEach((item, index) => {
+        const d = new Date();
+        d.setDate(d.getDate() + item.offset);
+        const dStr = formatDate(d);
+
+        if (index === 0) studentTargetDate = dStr;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `student-date-btn py-2 px-3 rounded-xl border-2 font-bold text-sm transition ${
+          index === 0 
+            ? 'bg-amber-500 text-white border-amber-600 shadow-sm' 
+            : 'bg-slate-100 text-slate-700 border-slate-200'
+        }`;
+        btn.innerText = `${item.label} (${d.getMonth() + 1}/${d.getDate()})`;
+        btn.onclick = () => {
+          studentTargetDate = dStr;
+          document.querySelectorAll('.student-date-btn').forEach(b => {
+            b.className = 'student-date-btn py-2 px-3 rounded-xl border-2 font-bold text-sm bg-slate-100 text-slate-700 border-slate-200';
+          });
+          btn.className = 'student-date-btn py-2 px-3 rounded-xl border-2 font-bold text-sm bg-amber-500 text-white border-amber-600 shadow-sm';
+          renderScheduleBanner();
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function renderScheduleBanner() {
+      const banner = document.getElementById('studentScheduleBanner');
+      const title = document.getElementById('studentScheduleTitle');
+      const body = document.getElementById('studentScheduleBody');
+      const attendBtn = document.getElementById('studentAttendBtn');
+      const absentBtn = document.getElementById('studentAbsentBtn');
+
+      const schedule = schedulesMap[studentTargetDate];
+
+      if (schedule && schedule.status === '休み') {
+        banner.className = 'p-4 rounded-2xl border-2 bg-rose-50 border-rose-300 text-rose-900 block';
+        title.innerHTML = '🚫 <b>この日の れんしゅうは 【おやすみ】 です！</b>';
+        body.innerHTML = schedule.description ? `<b>連絡:</b> ${schedule.description}` : '練習はお休みです。しっかり休養してね！';
+        attendBtn.classList.add('opacity-40', 'pointer-events-none');
+        absentBtn.classList.add('opacity-40', 'pointer-events-none');
+      } else if (schedule && schedule.description) {
+        banner.className = 'p-4 rounded-2xl border-2 bg-indigo-50 border-indigo-300 text-indigo-950 block';
+        title.innerHTML = '📌 <b>先生からの連絡・れんしゅう内容</b>';
+        body.innerHTML = `<b>内容・持ち物:</b> ${schedule.description}`;
+        attendBtn.classList.remove('opacity-40', 'pointer-events-none');
+        absentBtn.classList.remove('opacity-40', 'pointer-events-none');
+      } else {
+        banner.classList.add('hidden');
+        attendBtn.classList.remove('opacity-40', 'pointer-events-none');
+        absentBtn.classList.remove('opacity-40', 'pointer-events-none');
+      }
+    }
+
+    async function handleStudentSubmit(status) {
+      const nameInput = document.getElementById('studentNameInput');
+      const name = nameInput.value.trim();
+      const alertBox = document.getElementById('studentResultAlert');
+      const attendBtn = document.getElementById('studentAttendBtn');
+      const absentBtn = document.getElementById('studentAbsentBtn');
+
+      if (!name) {
+        alertBox.className = 'p-3 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
+        alertBox.innerText = '⚠️ おなまえを入力してください！';
+        nameInput.focus();
+        return;
+      }
+
+      localStorage.setItem(STORAGE_KEY_STUDENT, name);
+      attendBtn.disabled = true;
+      absentBtn.disabled = true;
+
+      try {
+        const normName = normalizeName(name);
+        const docId = `${normName}_${studentTargetDate}`;
+        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'attendance', docId);
+
+        await setDoc(ref, {
+          name: name,
+          normalizedName: normName,
+          date: studentTargetDate,
+          status: status,
+          note: '',
+          source: 'student',
+          updatedAt: new Date().toISOString()
+        });
+
+        alertBox.className = 'p-4 rounded-xl text-center font-black text-sm bg-emerald-100 text-emerald-800 block';
+        alertBox.innerHTML = `✅ <b>${name}さん</b>、${studentTargetDate} の出欠を【${status}】でおくりました！`;
+      } catch (err) {
+        alertBox.className = 'p-4 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
+        alertBox.innerHTML = `⚠️ おくれませんでした: ${err.message}`;
+      } finally {
+        attendBtn.disabled = false;
+        absentBtn.disabled = false;
+      }
+    }
+
+    async function init() {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+        authUser = auth.currentUser;
+
+        // 練習予定のリアルタイム監視
+        const schCol = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
+        onSnapshot(schCol, (snapshot) => {
+          const map = {};
+          snapshot.forEach(docSnap => {
+            map[docSnap.id] = docSnap.data();
+          });
+          schedulesMap = map;
+          renderScheduleBanner();
+        });
+
+        // 過去の生徒名サジェスト取得
+        const attCol = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
+        onSnapshot(attCol, (snapshot) => {
+          const dl = document.getElementById('studentNameSuggestions');
+          dl.innerHTML = '';
+          const names = new Set();
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.name) names.add(data.name);
+          });
+          names.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n;
+            dl.appendChild(opt);
+          });
+        });
+
+      } catch (err) {
+        console.error('初期化エラー:', err);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initDates();
+      const saved = localStorage.getItem(STORAGE_KEY_STUDENT);
+      if (saved) document.getElementById('studentNameInput').value = saved;
+
+      document.getElementById('studentAttendBtn').addEventListener('click', () => handleStudentSubmit('出席'));
+      document.getElementById('studentAbsentBtn').addEventListener('click', () => handleStudentSubmit('欠席'));
+
+      init();
+    });
+  </script>
+</body>
+</html>

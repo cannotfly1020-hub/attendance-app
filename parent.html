@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>【保護者用】運動教室 出欠管理ポータル</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-16 font-sans">
+
+  <!-- ヘッダー（保護者専用） -->
+  <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
+      <h1 class="text-base sm:text-lg font-bold flex items-center gap-2">
+        <span>🏃‍♂️</span> 運動教室 保護者ポータル
+      </h1>
+      <span class="text-[11px] bg-indigo-700/80 px-2 py-0.5 rounded-full text-indigo-100 font-semibold flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span> 接続中
+      </span>
+    </div>
+  </header>
+
+  <!-- トースト通知 -->
+  <div id="toastContainer" class="fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
+
+  <main class="max-w-xl mx-auto px-4 py-5 space-y-4">
+
+    <!-- お子さんのお名前入力・固定カード -->
+    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+      <div class="flex items-center justify-between">
+        <label class="text-xs font-bold text-slate-600 flex items-center gap-1">
+          <span>🧒</span> お子さんのお名前（フルネーム）
+        </label>
+        <span class="text-[11px] text-amber-600 font-semibold">端末に自動保存</span>
+      </div>
+      <div class="flex gap-2">
+        <input type="text" id="studentNameInput" list="registeredStudentNames" placeholder="例: 津守 堅心" 
+          class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <datalist id="registeredStudentNames"></datalist>
+        <button id="saveNameBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl active:scale-95 transition shadow-sm">
+          保存
+        </button>
+      </div>
+
+      <!-- 過去の登録生徒名クイック選択チップ -->
+      <div id="nameChipsArea" class="hidden pt-2 border-t border-slate-100">
+        <span class="text-[10px] text-slate-400 block mb-1">登録されている生徒名（タップで即設定）:</span>
+        <div id="nameChipsList" class="flex flex-wrap gap-1.5"></div>
+      </div>
+    </section>
+
+    <!-- 向こう2週間の練習日・出欠予定 -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div>
+          <h2 class="text-sm font-bold text-slate-800">直近2週間の練習日・出欠予定</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">日付をタップすると出欠の変更・理由メモを登録できます</p>
+        </div>
+      </div>
+      <div id="scheduleList" class="divide-y divide-slate-100">
+        <div class="p-8 text-center text-slate-400 text-xs">読み込み中...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="statusModal" class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-4 shadow-xl">
+      <div class="flex justify-between items-center border-b pb-2">
+        <div>
+          <h3 id="modalDateTitle" class="font-bold text-slate-800 text-sm sm:text-base">出欠登録</h3>
+          <div id="modalScheduleNotice" class="text-xs text-indigo-600 font-semibold mt-0.5 hidden"></div>
+        </div>
+        <button id="closeModalBtn" class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">&times;</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <button type="button" data-val="出席" class="status-choice-btn py-3 border-2 border-emerald-500 text-emerald-700 rounded-xl font-bold flex flex-col items-center justify-center hover:bg-emerald-50">
+          <span class="text-2xl">⭕</span>
+          <span>出席</span>
+        </button>
+        <button type="button" data-val="欠席" class="status-choice-btn py-3 border-2 border-rose-400 text-rose-600 rounded-xl font-bold flex flex-col items-center justify-center hover:bg-rose-50">
+          <span class="text-2xl">❌</span>
+          <span>欠席</span>
+        </button>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1">遅刻・早退・欠席理由（任意）</label>
+        <input type="text" id="modalNoteInput" placeholder="例: 15分遅れて参加 / 体調不良のため" 
+          class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <button id="submitAttendanceBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl active:scale-95 transition flex items-center justify-center gap-2">
+        <span>確定して保存</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'sports-attendance-app';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+      apiKey: "mock-key",
+      authDomain: "mock.firebaseapp.com",
+      projectId: "mock-project"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const STORAGE_KEY_NAME = 'sports_app_parent_kid';
+    let authUser = null;
+    let attendanceMap = {};
+    let schedulesMap = {};
+    let selectedDate = null;
+    let selectedStatus = '出席';
+
+    function normalizeName(name) {
+      return (name || '').replace(/[\s\u3000]+/g, '').trim();
+    }
+
+    function formatDate(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function getDayLabel(d) {
+      return ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+    }
+
+    function showToast(msg, isError = false) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `p-3 rounded-xl shadow-lg border text-xs font-bold pointer-events-auto flex items-center gap-2 ${
+        isError ? 'bg-rose-900 text-rose-100 border-rose-700' : 'bg-slate-900 text-white border-slate-700'
+      }`;
+      toast.innerHTML = `<span>${isError ? '⚠️' : '✅'}</span><span>${msg}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3500);
+    }
+
+    async function init() {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+        authUser = auth.currentUser;
+
+        // 出欠コレクションのリアルタイム監視
+        const attCol = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
+        onSnapshot(attCol, (snapshot) => {
+          const map = {};
+          snapshot.forEach(docSnap => {
+            map[docSnap.id] = docSnap.data();
+          });
+          attendanceMap = map;
+          renderNameChips();
+          renderList();
+        });
+
+        // 練習予定コレクションのリアルタイム監視
+        const schCol = collection(db, 'artifacts', appId, 'public', 'data', 'schedules');
+        onSnapshot(schCol, (snapshot) => {
+          const map = {};
+          snapshot.forEach(docSnap => {
+            map[docSnap.id] = docSnap.data();
+          });
+          schedulesMap = map;
+          renderList();
+        });
+
+      } catch (err) {
+        console.error('初期化エラー:', err);
+        showToast('同期接続に失敗しました。', true);
+      }
+    }
+
+    function renderNameChips() {
+      const chipsArea = document.getElementById('nameChipsArea');
+      const chipsList = document.getElementById('nameChipsList');
+      const datalist = document.getElementById('registeredStudentNames');
+      const uniqueNames = new Set();
+
+      Object.values(attendanceMap).forEach(item => {
+        if (item.name) uniqueNames.add(item.name);
+      });
+
+      if (uniqueNames.size === 0) {
+        chipsArea.classList.add('hidden');
+        return;
+      }
+
+      chipsArea.classList.remove('hidden');
+      chipsList.innerHTML = '';
+      datalist.innerHTML = '';
+
+      uniqueNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        datalist.appendChild(opt);
+
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-300 font-bold active:scale-95 transition';
+        chip.textContent = name;
+        chip.onclick = () => {
+          document.getElementById('studentNameInput').value = name;
+          localStorage.setItem(STORAGE_KEY_NAME, name);
+          renderList();
+        };
+        chipsList.appendChild(chip);
+      });
+    }
+
+    function renderList() {
+      const container = document.getElementById('scheduleList');
+      const studentName = document.getElementById('studentNameInput').value.trim();
+      const normKey = normalizeName(studentName);
+
+      const days = [];
+      const today = new Date();
+      for (let i = 0; i < 14; i++) {
+        const d = new Date();
+        d.setDate(today.getDate() + i);
+        days.push({
+          dateStr: formatDate(d),
+          dayLabel: getDayLabel(d),
+          isSunday: d.getDay() === 0,
+          isSaturday: d.getDay() === 6
+        });
+      }
+
+      container.innerHTML = '';
+
+      days.forEach(day => {
+        const lookupKey = `${normKey}_${day.dateStr}`;
+        const record = attendanceMap[lookupKey];
+        const schedule = schedulesMap[day.dateStr];
+        const isOff = schedule && schedule.status === '休み';
+
+        const row = document.createElement('div');
+        row.className = `p-3.5 flex items-center justify-between transition cursor-pointer ${
+          isOff ? 'bg-rose-50/40 hover:bg-rose-50' : 'hover:bg-slate-50'
+        }`;
+        row.onclick = () => openModal(day.dateStr, record, schedule);
+
+        let statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-400 font-bold">未登録</span>';
+        if (isOff) {
+          statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 font-bold border border-rose-200">🚫 練習休み</span>';
+        } else if (record) {
+          if (record.status === '出席') {
+            statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">⭕ 出席</span>';
+          } else if (record.status === '欠席') {
+            statusBadge = '<span class="text-xs px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-bold border border-rose-200">❌ 欠席</span>';
+          }
+        }
+
+        const dayColor = day.isSunday ? 'text-rose-600 font-bold' : (day.isSaturday ? 'text-blue-600 font-bold' : 'text-slate-800');
+
+        let descLine = '';
+        if (schedule && schedule.description) {
+          descLine = `<div class="text-xs ${isOff ? 'text-rose-600' : 'text-indigo-600'} font-semibold mt-0.5 truncate max-w-xs">📌 ${schedule.description}</div>`;
+        }
+
+        let sourceBadge = '';
+        if (record && record.source === 'student') {
+          sourceBadge = '<span class="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-1 py-0.5 rounded font-bold ml-1.5">本人入力</span>';
+        } else if (record && record.source === 'coach') {
+          sourceBadge = '<span class="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1 py-0.5 rounded font-bold ml-1.5">指導者</span>';
+        }
+
+        row.innerHTML = `
+          <div>
+            <div class="text-sm flex items-center gap-1.5">
+              <span class="${dayColor}">${day.dateStr}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">${day.dayLabel}</span>
+              ${sourceBadge}
+            </div>
+            ${descLine}
+            ${record && record.note ? `<div class="text-xs text-slate-500 font-medium mt-0.5 max-w-xs truncate">💬 ${record.note}</div>` : ''}
+          </div>
+          <div>${statusBadge}</div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function openModal(dateStr, currentRecord, schedule) {
+      const studentName = document.getElementById('studentNameInput').value.trim();
+      if (!studentName) {
+        showToast('先にお子さんのお名前を入力・保存してください。', true);
+        document.getElementById('studentNameInput').focus();
+        return;
+      }
+
+      selectedDate = dateStr;
+      document.getElementById('modalDateTitle').textContent = `${dateStr} の出欠登録`;
+
+      const notice = document.getElementById('modalScheduleNotice');
+      if (schedule && schedule.status === '休み') {
+        notice.textContent = `※ この日は練習休みの予定です (${schedule.description || '休講'})`;
+        notice.classList.remove('hidden');
+      } else if (schedule && schedule.description) {
+        notice.textContent = `連絡事項: ${schedule.description}`;
+        notice.classList.remove('hidden');
+      } else {
+        notice.classList.add('hidden');
+      }
+
+      selectedStatus = currentRecord ? currentRecord.status : '出席';
+      document.getElementById('modalNoteInput').value = currentRecord ? currentRecord.note : '';
+      updateModalBtnUI();
+
+      document.getElementById('statusModal').classList.remove('hidden');
+    }
+
+    function updateModalBtnUI() {
+      document.querySelectorAll('.status-choice-btn').forEach(btn => {
+        if (btn.dataset.val === selectedStatus) {
+          btn.classList.add('ring-2', 'ring-offset-2', 'ring-indigo-500', 'bg-indigo-50');
+        } else {
+          btn.classList.remove('ring-2', 'ring-offset-2', 'ring-indigo-500', 'bg-indigo-50');
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const saved = localStorage.getItem(STORAGE_KEY_NAME);
+      if (saved) document.getElementById('studentNameInput').value = saved;
+
+      document.getElementById('saveNameBtn').addEventListener('click', () => {
+        const name = document.getElementById('studentNameInput').value.trim();
+        if (name) {
+          localStorage.setItem(STORAGE_KEY_NAME, name);
+          showToast(`お子さんのお名前「${name}」を保存しました`);
+          renderList();
+        }
+      });
+
+      document.getElementById('closeModalBtn').addEventListener('click', () => {
+        document.getElementById('statusModal').classList.add('hidden');
+      });
+
+      document.querySelectorAll('.status-choice-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedStatus = btn.dataset.val;
+          updateModalBtnUI();
+        });
+      });
+
+      document.getElementById('submitAttendanceBtn').addEventListener('click', async () => {
+        const studentName = document.getElementById('studentNameInput').value.trim();
+        const note = document.getElementById('modalNoteInput').value.trim();
+        const btn = document.getElementById('submitAttendanceBtn');
+
+        btn.disabled = true;
+        btn.innerText = '保存中...';
+
+        try {
+          const normName = normalizeName(studentName);
+          const docId = `${normName}_${selectedDate}`;
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'attendance', docId);
+
+          await setDoc(ref, {
+            name: studentName,
+            normalizedName: normName,
+            date: selectedDate,
+            status: selectedStatus,
+            note: note,
+            source: 'parent',
+            updatedAt: new Date().toISOString()
+          });
+
+          document.getElementById('statusModal').classList.add('hidden');
+          showToast(`${selectedDate} の出欠を【${selectedStatus}】で保存しました！`);
+        } catch (err) {
+          showToast('出欠の更新に失敗しました: ' + err.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.innerText = '確定して保存';
+        }
+      });
+
+      init();
+    });
+  </script>
+</body>
+</html>
