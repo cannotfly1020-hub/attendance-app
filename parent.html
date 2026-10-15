@@ -2,7 +2,31 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <script>
+    (function () {
+      function fitAndroidViewport() {
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) return;
+        var dpr = window.devicePixelRatio || 1;
+        var screenCss = Math.round(Math.min(window.screen.width, window.screen.height) / dpr);
+        var layout = document.documentElement.clientWidth || window.innerWidth || 0;
+        var scale = window.visualViewport && window.visualViewport.scale ? window.visualViewport.scale : 1;
+        var android = /Android/i.test(navigator.userAgent);
+        if (screenCss < 280 || screenCss > 540) {
+          if (scale < 0.9 && layout > 0) screenCss = Math.round(layout * scale);
+        }
+        if (screenCss < 280 || screenCss > 540) return;
+        if ((android && layout > screenCss * 1.2) || scale < 0.9) {
+          var next = 'width=' + screenCss + ', initial-scale=1, minimum-scale=1';
+          if (meta.getAttribute('content') !== next) meta.setAttribute('content', next);
+        }
+      }
+      fitAndroidViewport();
+      document.addEventListener('DOMContentLoaded', fitAndroidViewport);
+      window.addEventListener('load', fitAndroidViewport);
+    })();
+  </script>
   <title>【保護者用】運動教室 出欠管理ポータル</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
