@@ -38,7 +38,7 @@
     <!-- いつの練習か選択 -->
     <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-amber-200 space-y-2">
       <label class="block text-xs font-bold text-slate-500">いつのれんしゅう？</label>
-      <div id="studentDateButtons" class="grid grid-cols-2 gap-2"></div>
+      <div id="studentDateButtons" class="grid grid-cols-4 sm:grid-cols-7 gap-2"></div>
     </div>
 
     <!-- せんせいからのおしらせ（常設） -->
@@ -213,6 +213,7 @@
         schedulesMap = split.schedules;
         schedulesReady = true;
         renderNameSuggestions();
+        renderDateButtons();
         renderScheduleBanner();
       } catch (err) {
         if (notify) {
@@ -234,35 +235,75 @@
       return (name || '').replace(/[\s\u3000]+/g, '').trim();
     }
 
-    function initDates() {
+    function weekdayLabel(dayIndex) {
+      return ['日', '月', '火', '水', '木', '金', '土'][dayIndex];
+    }
+
+    function upcomingDays() {
+      const days = [];
+      for (let offset = 0; offset < 7; offset++) {
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        const dateStr = formatDate(d);
+        let label = `${d.getMonth() + 1}/${d.getDate()}(${weekdayLabel(d.getDay())})`;
+        if (offset === 0) label = 'きょう';
+        else if (offset === 1) label = 'あした';
+        days.push({ dateStr: dateStr, label: label, day: d.getDay() });
+      }
+      return days;
+    }
+
+    function findOwnAttendance(dateStr) {
+      const name = document.getElementById('studentNameInput').value.trim();
+      const norm = normalizeName(name);
+      const target = normalizeDateKey(dateStr);
+      if (!norm || !target) return null;
+      const direct = attendanceMap[`${norm}_${target}`];
+      if (direct) return direct;
+      return Object.values(attendanceMap).find(item => {
+        if (!item) return false;
+        const itemNorm = item.normalizedName || normalizeName(item.name);
+        return itemNorm === norm && normalizeDateKey(item.date) === target;
+      }) || null;
+    }
+
+    function renderDateButtons() {
       const container = document.getElementById('studentDateButtons');
-      const days = [
-        { label: 'きょう', offset: 0 },
-        { label: 'あした', offset: 1 }
-      ];
+      const days = upcomingDays();
+      if (!days.some(day => day.dateStr === studentTargetDate)) {
+        studentTargetDate = days[0].dateStr;
+      }
 
       container.innerHTML = '';
-      days.forEach((item, index) => {
-        const d = new Date();
-        d.setDate(d.getDate() + item.offset);
-        const dStr = formatDate(d);
+      days.forEach(day => {
+        const selected = day.dateStr === studentTargetDate;
+        const schedule = schedulesMap[normalizeDateKey(day.dateStr)];
+        const record = findOwnAttendance(day.dateStr);
+        const off = isPracticeOff(schedule);
 
-        if (index === 0) studentTargetDate = dStr;
+        let badge = '';
+        if (off) badge = '🚫休';
+        else if (record && record.status === '出席') badge = '⭕いく';
+        else if (record && record.status === '欠席') badge = '❌やすむ';
+
+        let tone = 'bg-white text-slate-700 border-slate-200';
+        if (!selected && day.day === 0) tone = 'bg-white text-rose-600 border-rose-200';
+        if (!selected && day.day === 6) tone = 'bg-white text-blue-600 border-blue-200';
+        if (selected) tone = 'bg-amber-500 text-white border-amber-600 font-black shadow-md';
 
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `student-date-btn py-2 px-3 rounded-xl border-2 font-bold text-sm transition ${
-          index === 0 
-            ? 'bg-amber-500 text-white border-amber-600 shadow-sm' 
-            : 'bg-slate-100 text-slate-700 border-slate-200'
-        }`;
-        btn.innerText = `${item.label} (${d.getMonth() + 1}/${d.getDate()})`;
+        btn.className = `student-date-btn min-h-[3.25rem] px-1 py-1.5 rounded-xl border-2 text-[11px] sm:text-xs leading-tight transition flex flex-col items-center justify-center gap-0.5 ${tone}`;
+        const label = document.createElement('span');
+        label.className = 'font-black';
+        label.textContent = day.label;
+        const mark = document.createElement('span');
+        mark.className = `text-[10px] min-h-[14px] font-bold ${selected ? 'text-white' : ''}`;
+        mark.textContent = badge;
+        btn.append(label, mark);
         btn.onclick = () => {
-          studentTargetDate = dStr;
-          document.querySelectorAll('.student-date-btn').forEach(b => {
-            b.className = 'student-date-btn py-2 px-3 rounded-xl border-2 font-bold text-sm bg-slate-100 text-slate-700 border-slate-200';
-          });
-          btn.className = 'student-date-btn py-2 px-3 rounded-xl border-2 font-bold text-sm bg-amber-500 text-white border-amber-600 shadow-sm';
+          studentTargetDate = day.dateStr;
+          renderDateButtons();
           renderScheduleBanner();
         };
         container.appendChild(btn);
@@ -390,9 +431,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      initDates();
+      studentTargetDate = formatDate(new Date());
+      renderDateButtons();
       const saved = localStorage.getItem(STORAGE_KEY_STUDENT);
       if (saved) document.getElementById('studentNameInput').value = saved;
+      document.getElementById('studentNameInput').addEventListener('input', renderDateButtons);
 
       document.getElementById('studentAttendBtn').addEventListener('click', () => handleStudentSubmit('出席'));
       document.getElementById('studentAbsentBtn').addEventListener('click', () => handleStudentSubmit('欠席'));

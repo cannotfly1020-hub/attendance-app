@@ -71,12 +71,25 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-500 mb-1">練習内容・持ち物・連絡事項（生徒・保護者へ公開）</label>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <input type="text" id="schDescInput" placeholder="例: 体育館シューズ持参 / JUMPトレーニング＆ゲーム" 
-              class="flex-1 border border-slate-300 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white">
+              class="flex-1 min-w-[12rem] border border-slate-300 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white">
             <button id="saveScheduleBtn" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-1.5 rounded-xl active:scale-95 transition shrink-0">
               予定を保存
             </button>
+            <div class="relative shrink-0">
+              <button type="button" id="copyScheduleBtn" class="bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-300 active:scale-95 transition">
+                📋 予定をコピー
+              </button>
+              <div id="copyScheduleMenu" class="hidden absolute right-0 mt-1 z-20 w-64 max-w-[calc(100vw-2.5rem)] bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                <button type="button" data-copy="next-week" class="copy-option w-full text-left px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 border-b border-slate-100">
+                  翌週の同じ曜日（+7日後）にコピー
+                </button>
+                <button type="button" data-copy="week" class="copy-option w-full text-left px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  向こう1週間（7日間）すべてに同じ内容をコピー
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -134,6 +147,16 @@
     </div>
 
   </main>
+
+  <div id="copyConfirmModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-xl">
+      <p id="copyConfirmText" class="text-sm font-bold text-slate-800 leading-relaxed"></p>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" id="copyConfirmCancel" class="py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-700 hover:bg-slate-50">キャンセル</button>
+        <button type="button" id="copyConfirmOk" class="py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800">コピーする</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 手動代理登録モーダル -->
   <div id="manualModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
@@ -464,6 +487,88 @@
       document.getElementById('schStatusOffBtn').addEventListener('click', () => {
         currentScheduleStatus = '休み';
         updateScheduleUI();
+      });
+
+      function addDays(dateStr, days) {
+        const parts = String(dateStr).split('-').map(Number);
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        d.setDate(d.getDate() + days);
+        return formatDate(d);
+      }
+
+      function closeCopyMenu() {
+        document.getElementById('copyScheduleMenu').classList.add('hidden');
+      }
+
+      function askCopyConfirm(message) {
+        return new Promise(resolve => {
+          const modal = document.getElementById('copyConfirmModal');
+          document.getElementById('copyConfirmText').textContent = message;
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+          const okBtn = document.getElementById('copyConfirmOk');
+          const cancelBtn = document.getElementById('copyConfirmCancel');
+          const finish = (value) => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            okBtn.onclick = null;
+            cancelBtn.onclick = null;
+            resolve(value);
+          };
+          okBtn.onclick = () => finish(true);
+          cancelBtn.onclick = () => finish(false);
+        });
+      }
+
+      document.getElementById('copyScheduleBtn').addEventListener('click', (event) => {
+        event.stopPropagation();
+        document.getElementById('copyScheduleMenu').classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('#copyScheduleMenu') && event.target.id !== 'copyScheduleBtn') {
+          closeCopyMenu();
+        }
+      });
+
+      document.querySelectorAll('.copy-option').forEach(option => {
+        option.addEventListener('click', async () => {
+          const sourceDate = picker.value;
+          if (!sourceDate) return;
+          const desc = document.getElementById('schDescInput').value.trim();
+          const status = currentScheduleStatus;
+          const targets = option.dataset.copy === 'next-week'
+            ? [addDays(sourceDate, 7)]
+            : Array.from({ length: 7 }, (_, i) => addDays(sourceDate, i));
+          const rangeLabel = targets.length === 1
+            ? `来週 ${targets[0]}`
+            : `${targets[0]} から ${targets[targets.length - 1]} の7日間`;
+          closeCopyMenu();
+          const ok = await askCopyConfirm(`${sourceDate} の練習内容を、${rangeLabel}にコピーして保存しますか？`);
+          if (!ok) return;
+
+          const btn = document.getElementById('copyScheduleBtn');
+          btn.disabled = true;
+          btn.textContent = 'コピー保存中...';
+          try {
+            for (const date of targets) {
+              await gasFetch('POST', {
+                type: 'schedule',
+                date: date,
+                status: status,
+                description: desc
+              });
+            }
+            showToast('コピーが完了しました！');
+            await loadData();
+          } catch (err) {
+            showToast('コピーに失敗しました。' + err.message, true);
+            await loadData(false);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = '📋 予定をコピー';
+          }
+        });
       });
 
       // 予定保存
