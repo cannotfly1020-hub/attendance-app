@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>運動教室 出欠ポータル</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
@@ -11,8 +11,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
   <style>
+    html { -webkit-text-size-adjust: 100%; }
     body {
       font-family: 'Inter', 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+      padding-top: max(1rem, env(safe-area-inset-top));
+      padding-right: max(1rem, env(safe-area-inset-right));
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+      padding-left: max(1rem, env(safe-area-inset-left));
     }
     @keyframes toast-pop {
       from { opacity: 0; transform: translateY(-8px); }
@@ -23,11 +29,11 @@
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex items-center justify-center p-4 overflow-y-auto">
+<body class="bg-slate-100 text-slate-800 min-h-screen flex items-center justify-center overflow-x-hidden overflow-y-auto">
 
   <div id="toastContainer" class="fixed top-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none"></div>
 
-  <main class="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 space-y-6 my-4">
+  <main class="w-full max-w-md mx-auto bg-white rounded-3xl shadow-xl border border-slate-200 p-5 sm:p-8 space-y-6 my-4">
     <div class="text-center space-y-2">
       <span class="text-4xl">🏃‍♂️</span>
       <h1 class="text-xl sm:text-2xl font-black text-slate-900">運動教室 出欠管理ポータル</h1>
@@ -48,13 +54,13 @@
         </a>
         <div class="border-t border-slate-100 px-3 py-3">
           <div class="flex flex-wrap gap-2">
-            <button type="button" data-action="line" data-file="student.html" data-message="【運動教室】生徒用出欠送信ページです。こちらから出欠を入力してください！" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+            <button type="button" data-action="line" data-file="student.html" data-message="【運動教室】生徒用出欠送信ページです。こちらから出欠を入力してください！" class="share-btn grow basis-[30%] min-h-[44px] min-w-0 inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
               <span>💬</span><span>LINEで送る</span>
             </button>
-            <button type="button" data-action="copy" data-file="student.html" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+            <button type="button" data-action="copy" data-file="student.html" class="share-btn grow basis-[30%] min-h-[44px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
               <span>🔗</span><span>URLコピー</span>
             </button>
-            <button type="button" data-action="qr" data-file="student.html" data-title="生徒用 出欠ページ" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+            <button type="button" data-action="qr" data-file="student.html" data-title="生徒用 出欠ページ" class="share-btn grow basis-[30%] min-h-[44px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
               <span>📱</span><span>QR</span>
             </button>
           </div>
@@ -74,13 +80,13 @@
         </a>
         <div class="border-t border-slate-100 px-3 py-3">
           <div class="flex flex-wrap gap-2">
-            <button type="button" data-action="line" data-file="parent.html" data-message="【運動教室】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+            <button type="button" data-action="line" data-file="parent.html" data-message="【運動教室】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。" class="share-btn grow basis-[30%] min-h-[44px] min-w-0 inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
               <span>💬</span><span>LINEで送る</span>
             </button>
-            <button type="button" data-action="copy" data-file="parent.html" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+            <button type="button" data-action="copy" data-file="parent.html" class="share-btn grow basis-[30%] min-h-[44px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
               <span>🔗</span><span>URLコピー</span>
             </button>
-            <button type="button" data-action="qr" data-file="parent.html" data-title="保護者用ポータル" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+            <button type="button" data-action="qr" data-file="parent.html" data-title="保護者用ポータル" class="share-btn grow basis-[30%] min-h-[44px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
               <span>📱</span><span>QR</span>
             </button>
           </div>
