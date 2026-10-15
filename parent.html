@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>【保護者用】運動教室 出欠管理ポータル</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
@@ -12,21 +12,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
   <style>
     html, body {
+      width: 100%;
       overflow-x: hidden;
-      max-width: 100vw;
       -webkit-text-size-adjust: 100%;
     }
     body {
       font-family: 'Inter', 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
     }
     header {
       padding-top: env(safe-area-inset-top);
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen pb-16 overflow-x-hidden w-full max-w-full font-sans">
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-16 overflow-x-hidden w-full font-sans">
 
   <!-- ヘッダー（保護者専用） -->
   <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-30">
@@ -43,10 +41,10 @@
   <!-- トースト通知 -->
   <div id="toastContainer" class="fixed top-16 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <main class="w-full max-w-md mx-auto px-4 py-5 space-y-4">
+  <main class="w-full max-w-md mx-auto px-4 py-6 space-y-4">
 
     <!-- お子さんのお名前入力・固定カード -->
-    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+    <section class="w-full bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <label class="text-sm font-bold text-slate-600 flex items-center gap-1 min-w-0">
           <span>🧒</span> お子さんのお名前（フルネーム）
@@ -73,7 +71,7 @@
     <section id="upcomingNotice" class="hidden" aria-live="polite"></section>
 
     <!-- 向こう2週間の練習日・出欠予定 -->
-    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <section class="w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 bg-slate-50">
         <div>
           <h2 class="text-sm font-bold text-slate-800">直近2週間の練習日・出欠予定</h2>
@@ -88,7 +86,7 @@
   </main>
 
   <div id="statusModal" class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
-    <div class="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-4 shadow-xl">
+    <div class="bg-white w-full max-w-md shrink-0 rounded-t-2xl sm:rounded-2xl p-5 space-y-4 shadow-xl">
       <div class="flex justify-between items-center border-b pb-2">
         <div>
           <h3 id="modalDateTitle" class="font-bold text-slate-800 text-sm sm:text-base">出欠登録</h3>

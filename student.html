@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>【生徒用】れんしゅう出欠チェック</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
@@ -12,22 +12,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=swap" rel="stylesheet">
   <style>
     html, body {
+      width: 100%;
       overflow-x: hidden;
-      max-width: 100vw;
       -webkit-text-size-adjust: 100%;
     }
     body {
       font-family: 'Inter', 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding-top: max(1rem, env(safe-area-inset-top));
-      padding-right: max(1rem, env(safe-area-inset-right));
-      padding-bottom: max(1rem, env(safe-area-inset-bottom));
-      padding-left: max(1rem, env(safe-area-inset-left));
     }
   </style>
 </head>
-<body class="bg-amber-50 text-slate-800 min-h-screen flex flex-col justify-between overflow-x-hidden w-full max-w-full font-sans">
+<body class="bg-amber-50 text-slate-800 min-h-screen overflow-x-hidden w-full font-sans">
 
-  <div class="w-full max-w-md mx-auto space-y-4 pt-2">
+  <div class="w-full max-w-md mx-auto px-4 py-6 space-y-4">
 
     <!-- タイトル -->
     <div class="text-center">
@@ -38,7 +34,7 @@
     </div>
 
     <!-- お名前入力 -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-amber-200 space-y-1.5">
+    <div class="w-full bg-white p-4 rounded-2xl shadow-sm border-2 border-amber-200 space-y-1.5">
       <label class="block text-xs font-bold text-slate-500">なまえ（フルネーム）</label>
       <input type="text" id="studentNameInput" list="studentNameSuggestions" placeholder="例: つもり けんしん" 
         class="w-full text-base sm:text-lg font-black border-2 border-amber-300 rounded-xl px-3 py-2.5 focus:outline-none focus:border-amber-500 bg-amber-50/20">
@@ -47,13 +43,13 @@
     </div>
 
     <!-- いつの練習か選択 -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-amber-200 space-y-2">
+    <div class="w-full bg-white p-4 rounded-2xl shadow-sm border-2 border-amber-200 space-y-2">
       <label class="block text-xs font-bold text-slate-500">いつのれんしゅう？</label>
       <div id="studentDateButtons" class="grid grid-cols-4 sm:grid-cols-7 gap-2 w-full min-w-0 overflow-x-auto"></div>
     </div>
 
     <!-- せんせいからのおしらせ（常設） -->
-    <div id="studentScheduleBanner" class="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/80 text-amber-900 shadow-sm" aria-live="polite">
+    <div id="studentScheduleBanner" class="w-full p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/80 text-amber-900 shadow-sm" aria-live="polite">
       <div id="studentScheduleTitle" class="font-black text-sm">せんせいからのおしらせ</div>
       <div id="studentScheduleBody" class="text-sm mt-1 leading-relaxed">よみこみちゅう...</div>
     </div>
