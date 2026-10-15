@@ -12,11 +12,20 @@
     body {
       font-family: 'Inter', 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
+    @keyframes toast-pop {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .toast-pop {
+      animation: toast-pop 0.28s ease-out;
+    }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex items-center justify-center p-4">
+<body class="bg-slate-100 text-slate-800 min-h-screen flex items-center justify-center p-4 overflow-y-auto">
 
-  <main class="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 space-y-6">
+  <div id="toastContainer" class="fixed top-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none"></div>
+
+  <main class="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 space-y-6 my-4">
     <div class="text-center space-y-2">
       <span class="text-4xl">🏃‍♂️</span>
       <h1 class="text-xl sm:text-2xl font-black text-slate-900">運動教室 出欠管理ポータル</h1>
@@ -24,27 +33,57 @@
     </div>
 
     <div class="space-y-3">
-      <!-- 生徒用ボタン -->
-      <a href="student.html" class="block p-4 rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white shadow-md transition">
-        <div class="flex items-center gap-3">
-          <span class="text-3xl">🏃‍♂️</span>
-          <div class="text-left">
-            <div class="text-xs font-bold text-amber-100">子ども用</div>
-            <div class="text-base font-black">れんしゅう出欠チェック</div>
+      <!-- 生徒用 -->
+      <div class="rounded-2xl bg-amber-500 text-white shadow-md overflow-hidden">
+        <a href="student.html" class="block p-4 hover:bg-amber-600 active:scale-[0.99] transition">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">🏃‍♂️</span>
+            <div class="text-left">
+              <div class="text-xs font-bold text-amber-100">子ども用</div>
+              <div class="text-base font-black">れんしゅう出欠チェック</div>
+            </div>
+          </div>
+        </a>
+        <div class="border-t border-slate-100 px-3 py-3">
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-action="line" data-file="student.html" data-message="【運動教室】生徒用出欠送信ページです。こちらから出欠を入力してください！" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+              <span>💬</span><span>LINEで送る</span>
+            </button>
+            <button type="button" data-action="copy" data-file="student.html" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+              <span>🔗</span><span>URLコピー</span>
+            </button>
+            <button type="button" data-action="qr" data-file="student.html" data-title="生徒用 出欠ページ" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+              <span>📱</span><span>QR</span>
+            </button>
           </div>
         </div>
-      </a>
+      </div>
 
-      <!-- 保護者用ボタン -->
-      <a href="parent.html" class="block p-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-md transition">
-        <div class="flex items-center gap-3">
-          <span class="text-3xl">👨‍👩‍👧</span>
-          <div class="text-left">
-            <div class="text-xs font-bold text-indigo-200">お父さん・お母さん用</div>
-            <div class="text-base font-black">保護者ポータル（2週間カレンダー）</div>
+      <!-- 保護者用 -->
+      <div class="rounded-2xl bg-indigo-600 text-white shadow-md overflow-hidden">
+        <a href="parent.html" class="block p-4 hover:bg-indigo-700 active:scale-[0.99] transition">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">👨‍👩‍👧</span>
+            <div class="text-left">
+              <div class="text-xs font-bold text-indigo-200">お父さん・お母さん用</div>
+              <div class="text-base font-black">保護者ポータル（2週間カレンダー）</div>
+            </div>
+          </div>
+        </a>
+        <div class="border-t border-slate-100 px-3 py-3">
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-action="line" data-file="parent.html" data-message="【運動教室】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+              <span>💬</span><span>LINEで送る</span>
+            </button>
+            <button type="button" data-action="copy" data-file="parent.html" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+              <span>🔗</span><span>URLコピー</span>
+            </button>
+            <button type="button" data-action="qr" data-file="parent.html" data-title="保護者用ポータル" class="share-btn grow basis-[30%] min-w-[6.25rem] inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
+              <span>📱</span><span>QR</span>
+            </button>
           </div>
         </div>
-      </a>
+      </div>
 
       <!-- 指導者用ボタン -->
       <a href="coach.html" class="block p-4 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white shadow-md transition">
@@ -62,6 +101,118 @@
       ※ 各自の専用ページをブックマークまたはホーム画面に追加しておくと便利です
     </div>
   </main>
+
+  <div id="qrModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-xl">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="qrModalTitle" class="font-black text-slate-900 text-sm sm:text-base">QRコード</h2>
+        <button type="button" id="qrCloseBtn" class="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none px-1" aria-label="閉じる">&times;</button>
+      </div>
+      <img id="qrImage" alt="共有用QRコード" width="250" height="250" class="mx-auto w-[250px] max-w-full h-auto rounded-lg bg-white">
+      <p id="qrUrlText" class="text-xs text-slate-600 font-medium text-center break-all leading-relaxed"></p>
+    </div>
+  </div>
+
+  <script>
+    function getFullTargetUrl(fileName) {
+      const loc = window.location.href.split('?')[0].split('#')[0];
+      const base = loc.substring(0, loc.lastIndexOf('/'));
+      return `${base}/${fileName}`;
+    }
+
+    function showToast(message) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast-pop pointer-events-auto px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg';
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 2200);
+    }
+
+    function copyWithExecCommand(text) {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.top = '0';
+      area.style.left = '0';
+      area.style.width = '2em';
+      area.style.height = '2em';
+      area.style.padding = '0';
+      area.style.border = 'none';
+      area.style.outline = 'none';
+      area.style.boxShadow = 'none';
+      area.style.background = 'transparent';
+      document.body.appendChild(area);
+      area.focus();
+      area.select();
+      area.setSelectionRange(0, area.value.length);
+      let copied = false;
+      try {
+        copied = document.execCommand('copy');
+      } catch (err) {
+        copied = false;
+      }
+      document.body.removeChild(area);
+      if (copied) return Promise.resolve();
+      return Promise.reject(new Error('copy failed'));
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text).catch(() => copyWithExecCommand(text));
+      }
+      return copyWithExecCommand(text);
+    }
+
+    function openLineShare(fileName, message) {
+      const url = getFullTargetUrl(fileName);
+      const text = `${message}\n${url}`;
+      const shareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+      window.open(shareUrl, '_blank', 'noopener');
+    }
+
+    function openQrModal(fileName, title) {
+      const url = getFullTargetUrl(fileName);
+      document.getElementById('qrModalTitle').textContent = title || 'QRコード';
+      document.getElementById('qrUrlText').textContent = url;
+      document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`;
+      const modal = document.getElementById('qrModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeQrModal() {
+      const modal = document.getElementById('qrModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest('.share-btn');
+      if (!button) return;
+      const fileName = button.dataset.file;
+      const action = button.dataset.action;
+      if (action === 'line') {
+        openLineShare(fileName, button.dataset.message || '');
+        return;
+      }
+      if (action === 'copy') {
+        copyText(getFullTargetUrl(fileName))
+          .then(() => showToast('URLをコピーしました！'))
+          .catch(() => showToast('コピーに失敗しました'));
+        return;
+      }
+      if (action === 'qr') {
+        openQrModal(fileName, button.dataset.title);
+      }
+    });
+
+    document.getElementById('qrCloseBtn').addEventListener('click', closeQrModal);
+    document.getElementById('qrModal').addEventListener('click', (event) => {
+      if (event.target.id === 'qrModal') closeQrModal();
+    });
+  </script>
 
 </body>
 </html>
