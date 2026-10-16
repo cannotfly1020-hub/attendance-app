@@ -351,6 +351,7 @@
           const date = normalizeDateKey(item.date);
           next[doc.id] = {
             ...item,
+            docId: doc.id,
             date: date,
             updatedAt: timestampText(item.updatedAt)
           };
@@ -473,11 +474,41 @@
             <span class="text-sm font-bold text-slate-800 break-words">${item.name}</span>
             ${sourceLabel}
           </div>
-          <span class="text-[10px] text-slate-400">${item.updatedAt ? item.updatedAt.slice(11, 16) : ''}</span>
+          <div class="flex items-center gap-0.5 shrink-0">
+            <span class="text-[10px] text-slate-400">${item.updatedAt ? item.updatedAt.slice(11, 16) : ''}</span>
+          </div>
         </div>
         ${noteBlock}
       `;
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'delete-attendance-btn text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition active:scale-95';
+      deleteBtn.setAttribute('aria-label', `${item.name}さんの出欠を削除`);
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        deleteAttendance(item, deleteBtn);
+      });
+      el.querySelector('.shrink-0').appendChild(deleteBtn);
       return el;
+    }
+
+    async function deleteAttendance(item, button) {
+      const name = item.name || '';
+      const ok = confirm(`「${name}」さんのこの日の出欠登録を削除しますか？`);
+      if (!ok) return;
+
+      const docId = item.docId || `${item.normalizedName || normalizeName(name)}_${normalizeDateKey(item.date)}`;
+      button.disabled = true;
+      try {
+        await db.collection('attendance').doc(docId).delete();
+        showToast(`「${name}」さんの登録を削除しました`);
+      } catch (err) {
+        console.error(err);
+        button.disabled = false;
+        showToast('削除に失敗しました。通信環境を確認してください。', true);
+      }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
