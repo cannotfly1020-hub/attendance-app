@@ -30,6 +30,8 @@
   <title>【生徒用】れんしゅう出欠チェック</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -101,92 +103,25 @@
   </div>
 
   <script>
-    const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxwfoV8_RLpaQ9agscLAdqH8R6emiKBkQDFwRHJoquJIFaLwTJJ5eAWMIXkUqe1Tc7OOg/exec';
-    const GAS_HINT = 'CORSエラーまたはGASの公開設定（全員）を確認してください';
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
+      authDomain: "attendance-app-3092a.firebaseapp.com",
+      projectId: "attendance-app-3092a",
+      storageBucket: "attendance-app-3092a.firebasestorage.app",
+      messagingSenderId: "1049451840444",
+      appId: "1:1049451840444:web:04d60e7e1f486cbffaa633"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
     const STORAGE_KEY_STUDENT = 'sports_app_student_kid';
 
     let attendanceMap = {};
     let schedulesMap = {};
     let studentTargetDate = '';
     let schedulesReady = false;
-
-    function logGasError(url, payload, status, responseText, error) {
-      console.error('[GAS] 通信エラー', {
-        url,
-        payload: payload ?? null,
-        status: status ?? null,
-        responseText: responseText ?? '',
-        error: error || null
-      });
-    }
-
-    function gasError(message, url, payload, status, responseText, cause) {
-      logGasError(url, payload, status, responseText, cause);
-      const err = new Error(message);
-      if (cause) err.cause = cause;
-      return err;
-    }
-
-    async function gasFetch(method, payload) {
-      const isGet = method === 'GET';
-      const url = isGet ? `${GAS_ENDPOINT}?t=${Date.now()}` : GAS_ENDPOINT;
-      // Content-Type は付けない。text/plain 扱いにして OPTIONS プリフライトを避ける。
-      const options = isGet
-        ? { method: 'GET', redirect: 'follow', cache: 'no-store' }
-        : { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) };
-
-      let res;
-      try {
-        res = await fetch(url, options);
-      } catch (cause) {
-        throw gasError(`通信に失敗しました。${GAS_HINT}`, url, isGet ? null : payload, null, '', cause);
-      }
-
-      let responseText = '';
-      try {
-        responseText = await res.text();
-      } catch (cause) {
-        throw gasError(`応答を読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, '', cause);
-      }
-
-      const trimmed = responseText.trim();
-      const isHtml = /^</.test(trimmed) || /<!doctype|<html|accounts\.google\.com|ServiceLogin/i.test(trimmed);
-      if (!res.ok || !trimmed || isHtml) {
-        const login = /accounts\.google\.com|ServiceLogin|sign in - google|ログイン/i.test(responseText);
-        const message = login
-          ? `Googleのログイン画面が返されました。${GAS_HINT}`
-          : `サーバーがJSON以外を返しました（HTTP ${res.status}）。${GAS_HINT}`;
-        throw gasError(message, url, isGet ? null : payload, res.status, responseText);
-      }
-
-      let json;
-      try {
-        json = JSON.parse(trimmed);
-      } catch (cause) {
-        throw gasError(`応答をJSONとして読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, responseText, cause);
-      }
-
-      if (!json || json.status !== 'success') {
-        const serverMessage = (json && json.message) ? String(json.message) : '処理に失敗しました。';
-        throw gasError(serverMessage, url, isGet ? null : payload, res.status, responseText);
-      }
-
-      return json;
-    }
-
-    function asRecordMap(value) {
-      if (!value || typeof value !== 'object') return {};
-      if (Array.isArray(value)) {
-        const map = {};
-        value.forEach(item => {
-          if (!item || typeof item !== 'object') return;
-          const key = item.date || item.id;
-          if (key) map[key] = item;
-        });
-        return map;
-      }
-      return value;
-    }
 
     function normalizeDateKey(val) {
       if (!val) return '';
@@ -198,61 +133,69 @@
       return s;
     }
 
-    function rememberSchedule(schedules, key, item, fromNote) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-      const date = normalizeDateKey(item.date || key);
-      if (!date) return;
-      const description = String((fromNote ? (item.note || item.description) : (item.description || '')) || '').trim();
-      schedules[date] = {
-        date: date,
-        status: item.status || '通常練習',
-        isOff: item.status === '休み' || item.isOff === true,
-        description: description
-      };
+    function showStudentError(message) {
+      const alertBox = document.getElementById('studentResultAlert');
+      alertBox.className = 'p-4 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
+      alertBox.textContent = message;
     }
 
-    function applyGasData(json) {
-      const data = json.data && typeof json.data === 'object' && !Array.isArray(json.data) ? json.data : {};
-      const attendanceRaw = data.attendance || data;
-      const schedulesRaw = data.schedules || json.schedules || {};
-      const attendance = {};
-      const schedules = {};
-
-      Object.entries(asRecordMap(schedulesRaw)).forEach(([key, item]) => {
-        rememberSchedule(schedules, key, item, false);
+    function applyScheduleSnapshot(snap) {
+      const next = {};
+      snap.forEach(doc => {
+        const item = doc.data() || {};
+        const date = normalizeDateKey(item.date || doc.id);
+        if (!date) return;
+        next[date] = {
+          date: date,
+          status: item.status || '通常練習',
+          isOff: item.status === '休み',
+          description: String(item.description || '').trim()
+        };
       });
+      schedulesMap = next;
+      schedulesReady = true;
+      renderDateButtons();
+      renderScheduleBanner();
+    }
 
-      Object.entries(asRecordMap(attendanceRaw)).forEach(([key, item]) => {
-        if (key === 'attendance' || key === 'schedules') return;
-        if (!item || typeof item !== 'object' || Array.isArray(item) || !item.name) return;
+    function applyAttendanceSnapshot(snap) {
+      const next = {};
+      snap.forEach(doc => {
+        const item = doc.data() || {};
+        if (!item.name) return;
         const date = normalizeDateKey(item.date);
-        if (item.name === '【練習予定】' || item.source === 'schedule') {
-          if (date && !schedules[date]) rememberSchedule(schedules, key, item, true);
-          return;
-        }
-        attendance[key] = date ? { ...item, date: date } : item;
+        next[doc.id] = date ? { ...item, date: date } : item;
       });
-
-      return { attendance, schedules };
+      attendanceMap = next;
+      renderNameSuggestions();
+      renderDateButtons();
     }
 
-    async function loadData(notify = false) {
-      try {
-        const json = await gasFetch('GET');
-        const split = applyGasData(json);
-        attendanceMap = split.attendance;
-        schedulesMap = split.schedules;
+    function startLiveSync() {
+      db.collection('schedules').onSnapshot(applyScheduleSnapshot, (err) => {
+        console.error(err);
         schedulesReady = true;
-        renderNameSuggestions();
-        renderDateButtons();
         renderScheduleBanner();
-      } catch (err) {
-        if (notify) {
-          const alertBox = document.getElementById('studentResultAlert');
-          alertBox.className = 'p-4 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
-          alertBox.textContent = err.message;
-        }
-      }
+        showStudentError('予定を読み込めませんでした。通信環境を確認してください。');
+      });
+      db.collection('attendance').onSnapshot(applyAttendanceSnapshot, (err) => {
+        console.error(err);
+      });
+    }
+
+    async function saveAttendance(name, date, status, note, source) {
+      const normalizedName = normalizeName(name);
+      const dateStr = normalizeDateKey(date);
+      const docId = `${normalizedName}_${dateStr}`;
+      await db.collection('attendance').doc(docId).set({
+        name: name,
+        normalizedName: normalizedName,
+        date: dateStr,
+        status: status,
+        note: note || '',
+        source: source,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
     }
 
     function formatDate(d) {
@@ -439,23 +382,14 @@
       attendBtn.disabled = true;
       absentBtn.disabled = true;
 
-      const payload = {
-        type: 'attendance',
-        name: name,
-        date: studentTargetDate,
-        status: status,
-        note: '',
-        source: 'student'
-      };
-
       try {
-        await gasFetch('POST', payload);
+        await saveAttendance(name, studentTargetDate, status, '', 'student');
         alertBox.className = 'p-4 rounded-xl text-center font-black text-sm bg-emerald-100 text-emerald-800 block';
-        alertBox.innerHTML = `✅ <b>${escapeHtml(name)}さん</b>、${studentTargetDate} の出欠を【${escapeHtml(status)}】でおくりました！`;
-        await loadData(false);
+        alertBox.innerHTML = `✅ 送信しました！ <b>${escapeHtml(name)}さん</b>、${studentTargetDate} の出欠を【${escapeHtml(status)}】でおくりました！`;
       } catch (err) {
         alertBox.className = 'p-4 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
-        alertBox.textContent = `⚠️ おくれませんでした。${err.message}`;
+        alertBox.textContent = `⚠️ おくれませんでした。通信環境を確認してください。`;
+        console.error(err);
       } finally {
         renderScheduleBanner();
       }
@@ -471,11 +405,7 @@
       document.getElementById('studentAttendBtn').addEventListener('click', () => handleStudentSubmit('出席'));
       document.getElementById('studentAbsentBtn').addEventListener('click', () => handleStudentSubmit('欠席'));
 
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') loadData(false);
-      });
-
-      loadData(true);
+      startLiveSync();
     });
   </script>
 </body>

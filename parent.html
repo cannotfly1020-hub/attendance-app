@@ -30,6 +30,8 @@
   <title>【保護者用】運動教室 出欠管理ポータル</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -144,92 +146,25 @@
   </div>
 
   <script>
-    const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxwfoV8_RLpaQ9agscLAdqH8R6emiKBkQDFwRHJoquJIFaLwTJJ5eAWMIXkUqe1Tc7OOg/exec';
-    const GAS_HINT = 'CORSエラーまたはGASの公開設定（全員）を確認してください';
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
+      authDomain: "attendance-app-3092a.firebaseapp.com",
+      projectId: "attendance-app-3092a",
+      storageBucket: "attendance-app-3092a.firebasestorage.app",
+      messagingSenderId: "1049451840444",
+      appId: "1:1049451840444:web:04d60e7e1f486cbffaa633"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
     const STORAGE_KEY_NAME = 'sports_app_parent_kid';
 
     let attendanceMap = {};
     let schedulesMap = {};
     let selectedDate = null;
     let selectedStatus = '出席';
-
-    function logGasError(url, payload, status, responseText, error) {
-      console.error('[GAS] 通信エラー', {
-        url,
-        payload: payload ?? null,
-        status: status ?? null,
-        responseText: responseText ?? '',
-        error: error || null
-      });
-    }
-
-    function gasError(message, url, payload, status, responseText, cause) {
-      logGasError(url, payload, status, responseText, cause);
-      const err = new Error(message);
-      if (cause) err.cause = cause;
-      return err;
-    }
-
-    async function gasFetch(method, payload) {
-      const isGet = method === 'GET';
-      const url = isGet ? `${GAS_ENDPOINT}?t=${Date.now()}` : GAS_ENDPOINT;
-      // Content-Type は付けない。text/plain 扱いにして OPTIONS プリフライトを避ける。
-      const options = isGet
-        ? { method: 'GET', redirect: 'follow', cache: 'no-store' }
-        : { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) };
-
-      let res;
-      try {
-        res = await fetch(url, options);
-      } catch (cause) {
-        throw gasError(`通信に失敗しました。${GAS_HINT}`, url, isGet ? null : payload, null, '', cause);
-      }
-
-      let responseText = '';
-      try {
-        responseText = await res.text();
-      } catch (cause) {
-        throw gasError(`応答を読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, '', cause);
-      }
-
-      const trimmed = responseText.trim();
-      const isHtml = /^</.test(trimmed) || /<!doctype|<html|accounts\.google\.com|ServiceLogin/i.test(trimmed);
-      if (!res.ok || !trimmed || isHtml) {
-        const login = /accounts\.google\.com|ServiceLogin|sign in - google|ログイン/i.test(responseText);
-        const message = login
-          ? `Googleのログイン画面が返されました。${GAS_HINT}`
-          : `サーバーがJSON以外を返しました（HTTP ${res.status}）。${GAS_HINT}`;
-        throw gasError(message, url, isGet ? null : payload, res.status, responseText);
-      }
-
-      let json;
-      try {
-        json = JSON.parse(trimmed);
-      } catch (cause) {
-        throw gasError(`応答をJSONとして読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, responseText, cause);
-      }
-
-      if (!json || json.status !== 'success') {
-        const serverMessage = (json && json.message) ? String(json.message) : '処理に失敗しました。';
-        throw gasError(serverMessage, url, isGet ? null : payload, res.status, responseText);
-      }
-
-      return json;
-    }
-
-    function asRecordMap(value) {
-      if (!value || typeof value !== 'object') return {};
-      if (Array.isArray(value)) {
-        const map = {};
-        value.forEach(item => {
-          if (!item || typeof item !== 'object') return;
-          const key = item.date || item.id;
-          if (key) map[key] = item;
-        });
-        return map;
-      }
-      return value;
-    }
 
     function normalizeDateKey(val) {
       if (!val) return '';
@@ -241,56 +176,61 @@
       return s;
     }
 
-    function rememberSchedule(schedules, key, item, fromNote) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-      const date = normalizeDateKey(item.date || key);
-      if (!date) return;
-      const description = String((fromNote ? (item.note || item.description) : (item.description || '')) || '').trim();
-      schedules[date] = {
-        date: date,
-        status: item.status || '通常練習',
-        isOff: item.status === '休み' || item.isOff === true,
-        description: description
-      };
+    function refreshParentViews() {
+      renderNameChips();
+      renderUpcomingNotice();
+      renderList();
     }
 
-    function applyGasData(json) {
-      const data = json.data && typeof json.data === 'object' && !Array.isArray(json.data) ? json.data : {};
-      const attendanceRaw = data.attendance || data;
-      const schedulesRaw = data.schedules || json.schedules || {};
-      const attendance = {};
-      const schedules = {};
-
-      Object.entries(asRecordMap(schedulesRaw)).forEach(([key, item]) => {
-        rememberSchedule(schedules, key, item, false);
+    function startLiveSync() {
+      db.collection('schedules').onSnapshot((snap) => {
+        const next = {};
+        snap.forEach(doc => {
+          const item = doc.data() || {};
+          const date = normalizeDateKey(item.date || doc.id);
+          if (!date) return;
+          next[date] = {
+            date: date,
+            status: item.status || '通常練習',
+            isOff: item.status === '休み',
+            description: String(item.description || '').trim()
+          };
+        });
+        schedulesMap = next;
+        refreshParentViews();
+      }, (err) => {
+        console.error(err);
+        showToast('予定を読み込めませんでした。通信環境を確認してください。', true);
       });
 
-      Object.entries(asRecordMap(attendanceRaw)).forEach(([key, item]) => {
-        if (key === 'attendance' || key === 'schedules') return;
-        if (!item || typeof item !== 'object' || Array.isArray(item) || !item.name) return;
-        const date = normalizeDateKey(item.date);
-        if (item.name === '【練習予定】' || item.source === 'schedule') {
-          if (date && !schedules[date]) rememberSchedule(schedules, key, item, true);
-          return;
-        }
-        attendance[key] = date ? { ...item, date: date } : item;
+      db.collection('attendance').onSnapshot((snap) => {
+        const next = {};
+        snap.forEach(doc => {
+          const item = doc.data() || {};
+          if (!item.name) return;
+          const date = normalizeDateKey(item.date);
+          next[doc.id] = date ? { ...item, date: date } : item;
+        });
+        attendanceMap = next;
+        refreshParentViews();
+      }, (err) => {
+        console.error(err);
+        showToast('出欠を読み込めませんでした。通信環境を確認してください。', true);
       });
-
-      return { attendance, schedules };
     }
 
-    async function loadData(notify = false) {
-      try {
-        const json = await gasFetch('GET');
-        const split = applyGasData(json);
-        attendanceMap = split.attendance;
-        schedulesMap = split.schedules;
-        renderNameChips();
-        renderUpcomingNotice();
-        renderList();
-      } catch (err) {
-        if (notify) showToast(err.message, true);
-      }
+    async function saveAttendance(name, date, status, note, source) {
+      const normalizedName = normalizeName(name);
+      const dateStr = normalizeDateKey(date);
+      await db.collection('attendance').doc(`${normalizedName}_${dateStr}`).set({
+        name: name,
+        normalizedName: normalizedName,
+        date: dateStr,
+        status: status,
+        note: note || '',
+        source: source,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
     }
 
     function normalizeName(name) {
@@ -612,34 +552,21 @@
         btn.disabled = true;
         btn.innerText = '保存中...';
 
-        const payload = {
-          type: 'attendance',
-          name: studentName,
-          date: selectedDate,
-          status: selectedStatus,
-          note: note,
-          source: 'parent'
-        };
-
         try {
-          await gasFetch('POST', payload);
+          await saveAttendance(studentName, selectedDate, selectedStatus, note, 'parent');
           localStorage.setItem(STORAGE_KEY_NAME, studentName);
           document.getElementById('statusModal').classList.add('hidden');
           showToast(`${selectedDate} の出欠を【${selectedStatus}】で保存しました！`);
-          await loadData(false);
         } catch (err) {
-          showToast('出欠の更新に失敗しました。' + err.message, true);
+          console.error(err);
+          showToast('出欠の更新に失敗しました。通信環境を確認してください。', true);
         } finally {
           btn.disabled = false;
           btn.innerText = '確定して保存';
         }
       });
 
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') loadData(false);
-      });
-
-      loadData(true);
+      startLiveSync();
     });
   </script>
 </body>

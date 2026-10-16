@@ -30,6 +30,8 @@
   <title>【指導者専用】出欠＆練習予定ダッシュボード</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -229,13 +231,25 @@
   </div>
 
   <script>
-    const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxwfoV8_RLpaQ9agscLAdqH8R6emiKBkQDFwRHJoquJIFaLwTJJ5eAWMIXkUqe1Tc7OOg/exec';
-    const GAS_HINT = 'CORSエラーまたはGASの公開設定（全員）を確認してください';
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
+      authDomain: "attendance-app-3092a.firebaseapp.com",
+      projectId: "attendance-app-3092a",
+      storageBucket: "attendance-app-3092a.firebasestorage.app",
+      messagingSenderId: "1049451840444",
+      appId: "1:1049451840444:web:04d60e7e1f486cbffaa633"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
 
     let attendanceMap = {};
     let schedulesMap = {};
     let currentScheduleStatus = '通常練習';
     let manualSelectedStatus = '出席';
+    let scheduleFormDirty = false;
 
     function formatDate(d) {
       const year = d.getFullYear();
@@ -264,126 +278,90 @@
       setTimeout(() => toast.remove(), isError ? 8000 : 3500);
     }
 
-    function logGasError(url, payload, status, responseText, error) {
-      console.error('[GAS] 通信エラー', {
-        url,
-        payload: payload ?? null,
-        status: status ?? null,
-        responseText: responseText ?? '',
-        error: error || null
+    function normalizeDateKey(val) {
+      if (!val) return '';
+      const s = String(val).trim().replace(/\//g, '-');
+      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+      return s;
+    }
+
+    function timestampText(value) {
+      if (!value) return '';
+      if (typeof value === 'string') return value;
+      const date = value.toDate ? value.toDate() : null;
+      if (!date || Number.isNaN(date.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function schedulePayload(date, status, description) {
+      return {
+        date: date,
+        status: status,
+        description: description || '',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+    }
+
+    async function saveSchedule(date, status, description) {
+      const dateStr = normalizeDateKey(date);
+      await db.collection('schedules').doc(dateStr).set(schedulePayload(dateStr, status, description));
+    }
+
+    async function saveAttendance(name, date, status, note, source) {
+      const normalizedName = normalizeName(name);
+      const dateStr = normalizeDateKey(date);
+      await db.collection('attendance').doc(`${normalizedName}_${dateStr}`).set({
+        name: name,
+        normalizedName: normalizedName,
+        date: dateStr,
+        status: status,
+        note: note || '',
+        source: source,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
 
-    function gasError(message, url, payload, status, responseText, cause) {
-      logGasError(url, payload, status, responseText, cause);
-      const err = new Error(message);
-      if (cause) err.cause = cause;
-      return err;
-    }
-
-    async function gasFetch(method, payload) {
-      const isGet = method === 'GET';
-      const url = isGet ? `${GAS_ENDPOINT}?t=${Date.now()}` : GAS_ENDPOINT;
-      // Content-Type は付けない。text/plain 扱いにして OPTIONS プリフライトを避ける。
-      const options = isGet
-        ? { method: 'GET', redirect: 'follow', cache: 'no-store' }
-        : { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) };
-
-      let res;
-      try {
-        res = await fetch(url, options);
-      } catch (cause) {
-        throw gasError(`通信に失敗しました。${GAS_HINT}`, url, isGet ? null : payload, null, '', cause);
-      }
-
-      let responseText = '';
-      try {
-        responseText = await res.text();
-      } catch (cause) {
-        throw gasError(`応答を読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, '', cause);
-      }
-
-      const trimmed = responseText.trim();
-      const isHtml = /^</.test(trimmed) || /<!doctype|<html|accounts\.google\.com|ServiceLogin/i.test(trimmed);
-      if (!res.ok || !trimmed || isHtml) {
-        const login = /accounts\.google\.com|ServiceLogin|sign in - google|ログイン/i.test(responseText);
-        const message = login
-          ? `Googleのログイン画面が返されました。${GAS_HINT}`
-          : `サーバーがJSON以外を返しました（HTTP ${res.status}）。${GAS_HINT}`;
-        throw gasError(message, url, isGet ? null : payload, res.status, responseText);
-      }
-
-      let json;
-      try {
-        json = JSON.parse(trimmed);
-      } catch (cause) {
-        throw gasError(`応答をJSONとして読めませんでした。${GAS_HINT}`, url, isGet ? null : payload, res.status, responseText, cause);
-      }
-
-      if (!json || json.status !== 'success') {
-        const serverMessage = (json && json.message) ? String(json.message) : '処理に失敗しました。';
-        throw gasError(serverMessage, url, isGet ? null : payload, res.status, responseText);
-      }
-
-      return json;
-    }
-
-    function asRecordMap(value) {
-      if (!value || typeof value !== 'object') return {};
-      if (Array.isArray(value)) {
-        const map = {};
-        value.forEach(item => {
-          if (!item || typeof item !== 'object') return;
-          const key = item.date || item.id;
-          if (key) map[key] = item;
+    function startLiveSync() {
+      db.collection('schedules').onSnapshot((snap) => {
+        const next = {};
+        snap.forEach(doc => {
+          const item = doc.data() || {};
+          const date = normalizeDateKey(item.date || doc.id);
+          if (!date) return;
+          next[date] = {
+            date: date,
+            status: item.status || '通常練習',
+            description: item.description || ''
+          };
         });
-        return map;
-      }
-      return value;
-    }
-
-    function applyGasData(json) {
-      const data = json.data && typeof json.data === 'object' && !Array.isArray(json.data) ? json.data : {};
-      const attendanceRaw = data.attendance || data;
-      const schedulesRaw = data.schedules || json.schedules || {};
-      const attendance = {};
-      const schedules = {};
-
-      Object.entries(asRecordMap(attendanceRaw)).forEach(([key, item]) => {
-        if (key === 'attendance' || key === 'schedules') return;
-        if (!item || typeof item !== 'object' || Array.isArray(item) || !item.name) return;
-        if (item.name === '【練習予定】' || item.source === 'schedule') return;
-        attendance[key] = item;
+        schedulesMap = next;
+        renderDashboard();
+      }, (err) => {
+        console.error(err);
+        showToast('予定を読み込めませんでした。通信環境を確認してください。', true);
       });
 
-      Object.entries(asRecordMap(schedulesRaw)).forEach(([key, item]) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-        const date = item.date || key;
-        schedules[date] = {
-          date: date,
-          status: item.status || '通常練習',
-          description: item.description || ''
-        };
-      });
-
-      return { attendance, schedules };
-    }
-
-    async function loadData(notify = true) {
-      const refreshBtn = document.getElementById('refreshBtn');
-      refreshBtn.classList.add('opacity-50');
-      try {
-        const json = await gasFetch('GET');
-        const split = applyGasData(json);
-        attendanceMap = split.attendance;
-        schedulesMap = split.schedules;
+      db.collection('attendance').onSnapshot((snap) => {
+        const next = {};
+        snap.forEach(doc => {
+          const item = doc.data() || {};
+          if (!item.name) return;
+          const date = normalizeDateKey(item.date);
+          next[doc.id] = {
+            ...item,
+            date: date,
+            updatedAt: timestampText(item.updatedAt)
+          };
+        });
+        attendanceMap = next;
         populateDatalist();
         renderDashboard();
-      } catch (err) {
-        if (notify) showToast(err.message, true);
-      } finally {
-        refreshBtn.classList.remove('opacity-50');
-      }
+      }, (err) => {
+        console.error(err);
+        showToast('出欠を読み込めませんでした。通信環境を確認してください。', true);
+      });
     }
 
     function populateDatalist() {
@@ -416,17 +394,26 @@
       }
     }
 
+    let lastRenderedDate = '';
+
     function renderDashboard() {
       const selectedDate = document.getElementById('targetDatePicker').value;
       if (!selectedDate) return;
 
-      const schedule = schedulesMap[selectedDate];
-      if (schedule) {
-        currentScheduleStatus = schedule.status;
-        document.getElementById('schDescInput').value = schedule.description || '';
-      } else {
-        currentScheduleStatus = '通常練習';
-        document.getElementById('schDescInput').value = '';
+      if (selectedDate !== lastRenderedDate) {
+        scheduleFormDirty = false;
+        lastRenderedDate = selectedDate;
+      }
+
+      if (!scheduleFormDirty) {
+        const schedule = schedulesMap[selectedDate];
+        if (schedule) {
+          currentScheduleStatus = schedule.status;
+          document.getElementById('schDescInput').value = schedule.description || '';
+        } else {
+          currentScheduleStatus = '通常練習';
+          document.getElementById('schDescInput').value = '';
+        }
       }
       updateScheduleUI();
 
@@ -511,15 +498,26 @@
         renderDashboard();
       });
 
-      document.getElementById('refreshBtn').addEventListener('click', loadData);
+      document.getElementById('refreshBtn').addEventListener('click', () => {
+        const refreshBtn = document.getElementById('refreshBtn');
+        refreshBtn.classList.add('opacity-50');
+        renderDashboard();
+        setTimeout(() => refreshBtn.classList.remove('opacity-50'), 200);
+      });
+
+      document.getElementById('schDescInput').addEventListener('input', () => {
+        scheduleFormDirty = true;
+      });
 
       document.getElementById('schStatusNormalBtn').addEventListener('click', () => {
         currentScheduleStatus = '通常練習';
+        scheduleFormDirty = true;
         updateScheduleUI();
       });
 
       document.getElementById('schStatusOffBtn').addEventListener('click', () => {
         currentScheduleStatus = '休み';
+        scheduleFormDirty = true;
         updateScheduleUI();
       });
 
@@ -585,19 +583,16 @@
           btn.disabled = true;
           btn.textContent = 'コピー保存中...';
           try {
-            for (const date of targets) {
-              await gasFetch('POST', {
-                type: 'schedule',
-                date: date,
-                status: status,
-                description: desc
-              });
-            }
+            const batch = db.batch();
+            targets.forEach(date => {
+              const dateStr = normalizeDateKey(date);
+              batch.set(db.collection('schedules').doc(dateStr), schedulePayload(dateStr, status, desc));
+            });
+            await batch.commit();
             showToast('コピーが完了しました！');
-            await loadData();
           } catch (err) {
-            showToast('コピーに失敗しました。' + err.message, true);
-            await loadData(false);
+            console.error(err);
+            showToast('コピーに失敗しました。通信環境を確認してください。', true);
           } finally {
             btn.disabled = false;
             btn.textContent = '📋 予定をコピー';
@@ -614,19 +609,13 @@
         btn.disabled = true;
         btn.innerText = '保存中...';
 
-        const payload = {
-          type: 'schedule',
-          date: date,
-          status: currentScheduleStatus,
-          description: desc
-        };
-
         try {
-          await gasFetch('POST', payload);
+          await saveSchedule(date, currentScheduleStatus, desc);
+          scheduleFormDirty = false;
           showToast(`${date} の練習予定を保存しました！`);
-          await loadData(false);
         } catch (err) {
-          showToast('予定の保存に失敗しました。' + err.message, true);
+          console.error(err);
+          showToast('予定の保存に失敗しました。通信環境を確認してください。', true);
         } finally {
           btn.disabled = false;
           btn.innerText = '予定を保存';
@@ -662,31 +651,22 @@
         btn.disabled = true;
         btn.innerText = '登録中...';
 
-        const payload = {
-          type: 'attendance',
-          name: name,
-          date: date,
-          status: manualSelectedStatus,
-          note: note,
-          source: 'coach'
-        };
-
         try {
-          await gasFetch('POST', payload);
+          await saveAttendance(name, date, manualSelectedStatus, note, 'coach');
           manualModal.classList.add('hidden');
           document.getElementById('manualNameInput').value = '';
           document.getElementById('manualNoteInput').value = '';
           showToast(`${name} さんの出欠を保存しました！`);
-          await loadData(false);
         } catch (err) {
-          showToast('登録に失敗しました。' + err.message, true);
+          console.error(err);
+          showToast('登録に失敗しました。通信環境を確認してください。', true);
         } finally {
           btn.disabled = false;
           btn.innerText = '保存して反映';
         }
       });
 
-      loadData();
+      startLiveSync();
     });
   </script>
 </body>
