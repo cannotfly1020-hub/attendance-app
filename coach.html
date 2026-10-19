@@ -119,10 +119,10 @@
               </button>
               <div id="copyScheduleMenu" class="hidden absolute left-0 sm:left-auto sm:right-0 mt-1 z-20 w-[min(16rem,calc(100vw-2rem))] max-w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
                 <button type="button" data-copy="next-week" class="copy-option w-full text-left px-3 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 border-b border-slate-100">
-                  翌週の同じ曜日（+7日後）にコピー
+                  📅 来週同曜日にコピー
                 </button>
                 <button type="button" data-copy="week" class="copy-option w-full text-left px-3 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
-                  向こう1週間（7日間）すべてに同じ内容をコピー
+                  📆 向こう7日間に一括コピー
                 </button>
               </div>
             </div>
@@ -553,10 +553,13 @@
       });
 
       function addDays(dateStr, days) {
-        const parts = String(dateStr).split('-').map(Number);
-        const d = new Date(parts[0], parts[1] - 1, parts[2]);
-        d.setDate(d.getDate() + days);
-        return formatDate(d);
+        const [y, m, d] = String(dateStr).split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+        date.setDate(date.getDate() + days);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
       }
 
       function closeCopyMenu() {
@@ -600,14 +603,15 @@
           if (!sourceDate) return;
           const desc = document.getElementById('schDescInput').value.trim();
           const status = currentScheduleStatus;
-          const targets = option.dataset.copy === 'next-week'
+          const isNextWeek = option.dataset.copy === 'next-week';
+          const targets = isNextWeek
             ? [addDays(sourceDate, 7)]
             : Array.from({ length: 7 }, (_, i) => addDays(sourceDate, i));
-          const rangeLabel = targets.length === 1
-            ? `来週 ${targets[0]}`
-            : `${targets[0]} から ${targets[targets.length - 1]} の7日間`;
+          const message = isNextWeek
+            ? `${sourceDate} の設定を、来週の ${targets[0]} にコピーして保存しますか？`
+            : `${sourceDate} の設定を、向こう7日間（${targets[0]}〜${targets[targets.length - 1]}）すべてにコピーして保存しますか？`;
           closeCopyMenu();
-          const ok = await askCopyConfirm(`${sourceDate} の練習内容を、${rangeLabel}にコピーして保存しますか？`);
+          const ok = await askCopyConfirm(message);
           if (!ok) return;
 
           const btn = document.getElementById('copyScheduleBtn');
@@ -617,10 +621,10 @@
             const batch = db.batch();
             targets.forEach(date => {
               const dateStr = normalizeDateKey(date);
-              batch.set(db.collection('schedules').doc(dateStr), schedulePayload(dateStr, status, desc));
+              batch.set(db.collection('schedules').doc(dateStr), schedulePayload(dateStr, status, desc), { merge: true });
             });
             await batch.commit();
-            showToast('コピーが完了しました！');
+            showToast(isNextWeek ? '来週同曜日の予定をコピーしました！' : '向こう7日間の予定を一括コピーしました！');
           } catch (err) {
             console.error(err);
             showToast('コピーに失敗しました。通信環境を確認してください。', true);
