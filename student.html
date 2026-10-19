@@ -27,7 +27,7 @@
       window.addEventListener('load', fitAndroidViewport);
     })();
   </script>
-  <title>【生徒用】れんしゅう出欠チェック</title>
+  <title>【生徒用】運動教室 れんしゅう出欠チェック</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -106,10 +106,10 @@
   </div>
 
   <script>
-    const CLUB_NAME = "運動教室"; // 教室名・クラブ名
+    const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
     const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
     const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
-    document.title = `【生徒用】${CLUB_NAME} 出欠チェック`;
+    document.title = `【生徒用】${CLUB_NAME} れんしゅう出欠チェック`;
     document.getElementById('studentClubName').textContent = CLUB_NAME;
     document.getElementById('studentScheduleTitle').textContent = `${COACH_TITLE}からのおしらせ`;
 
@@ -183,7 +183,21 @@
       renderDateButtons();
     }
 
+    function updateClubNameDisplay(name) {
+      const next = String(name || '').trim() || CLUB_NAME;
+      document.title = `【生徒用】${next} れんしゅう出欠チェック`;
+      document.getElementById('studentClubName').textContent = next;
+    }
+
     function startLiveSync() {
+      db.collection('settings').doc('general').onSnapshot((doc) => {
+        const data = doc.exists ? (doc.data() || {}) : {};
+        const clubName = data.clubName || CLUB_NAME;
+        updateClubNameDisplay(clubName);
+      }, () => {
+        updateClubNameDisplay(CLUB_NAME);
+      });
+
       db.collection('schedules').onSnapshot(applyScheduleSnapshot, (err) => {
         console.error(err);
         schedulesReady = true;

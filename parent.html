@@ -146,11 +146,17 @@
   </div>
 
   <script>
-    const CLUB_NAME = "運動教室"; // 教室名・クラブ名
+    const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
     const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
     const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
-    document.title = `【保護者用】${CLUB_NAME} 出欠管理ポータル`;
-    document.getElementById('parentPortalTitle').textContent = `${CLUB_NAME} 保護者ポータル`;
+
+    function updateClubNameDisplay(name) {
+      const next = String(name || '').trim() || CLUB_NAME;
+      document.title = `【保護者用】${next} 出欠管理ポータル`;
+      document.getElementById('parentPortalTitle').textContent = `${next} 保護者ポータル`;
+    }
+
+    updateClubNameDisplay(CLUB_NAME);
 
     const firebaseConfig = {
       apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
@@ -190,6 +196,14 @@
     }
 
     function startLiveSync() {
+      db.collection('settings').doc('general').onSnapshot((doc) => {
+        const data = doc.exists ? (doc.data() || {}) : {};
+        const clubName = data.clubName || CLUB_NAME;
+        updateClubNameDisplay(clubName);
+      }, () => {
+        updateClubNameDisplay(CLUB_NAME);
+      });
+
       db.collection('schedules').onSnapshot((snap) => {
         const next = {};
         snap.forEach(doc => {

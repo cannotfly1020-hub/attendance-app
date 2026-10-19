@@ -27,9 +27,11 @@
       window.addEventListener('load', fitAndroidViewport);
     })();
   </script>
-  <title>運動教室 出欠ポータル</title>
+  <title>運動教室 出欠管理ポータル</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -147,16 +149,48 @@
   </div>
 
   <script>
-    const CLUB_NAME = "運動教室"; // 教室名・クラブ名
+    const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
     const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
 
-    document.title = `${CLUB_NAME} 出欠管理ポータル`;
-    document.getElementById('portalTitle').textContent = `${CLUB_NAME} 出欠管理ポータル`;
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
+      authDomain: "attendance-app-3092a.firebaseapp.com",
+      projectId: "attendance-app-3092a",
+      storageBucket: "attendance-app-3092a.firebasestorage.app",
+      messagingSenderId: "1049451840444",
+      appId: "1:1049451840444:web:04d60e7e1f486cbffaa633"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    function updateClubNameDisplay(name) {
+      const next = String(name || '').trim() || CLUB_NAME;
+      document.title = `${next} 出欠管理ポータル`;
+      document.getElementById('portalTitle').textContent = `${next} 出欠管理ポータル`;
+      const studentLine = document.querySelector('[data-action="line"][data-file="student.html"]');
+      const parentLine = document.querySelector('[data-action="line"][data-file="parent.html"]');
+      if (studentLine) {
+        studentLine.dataset.message = `【${next}】生徒用出欠送信ページです。こちらから出欠を入力してください！`;
+      }
+      if (parentLine) {
+        parentLine.dataset.message = `【${next}】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。`;
+      }
+    }
+
     document.getElementById('coachRoleLabel').textContent = `${COACH_TITLE}専用`;
-    document.querySelector('[data-action="line"][data-file="student.html"]').dataset.message =
-      `【${CLUB_NAME}】生徒用出欠送信ページです。こちらから出欠を入力してください！`;
-    document.querySelector('[data-action="line"][data-file="parent.html"]').dataset.message =
-      `【${CLUB_NAME}】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。`;
+    updateClubNameDisplay(CLUB_NAME);
+
+    db.collection('settings').doc('general').onSnapshot((doc) => {
+      const data = doc.exists ? (doc.data() || {}) : {};
+      const clubName = data.clubName || CLUB_NAME;
+      updateClubNameDisplay(clubName);
+    }, (err) => {
+      console.error(err);
+      updateClubNameDisplay(CLUB_NAME);
+    });
 
     function getFullTargetUrl(fileName) {
       const loc = window.location.href.split('?')[0].split('#')[0];
