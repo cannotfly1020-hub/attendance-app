@@ -60,7 +60,7 @@
     <div class="w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-5 sm:p-8 space-y-6">
     <div class="text-center space-y-2">
       <span class="text-4xl">🏃‍♂️</span>
-      <h1 class="text-xl sm:text-2xl font-black text-slate-900 break-words">運動教室 出欠管理ポータル</h1>
+      <h1 id="portalTitle" class="text-xl sm:text-2xl font-black text-slate-900 break-words">運動教室 出欠管理ポータル</h1>
       <p class="text-xs text-slate-500 font-bold">ご利用の画面を選択してください</p>
     </div>
 
@@ -122,7 +122,7 @@
         <div class="flex items-center gap-3">
           <span class="text-3xl shrink-0">📋</span>
           <div class="text-left min-w-0 flex-1">
-            <div class="text-xs font-bold text-slate-400">先生・指導者専用</div>
+            <div id="coachRoleLabel" class="text-xs font-bold text-slate-400">コーチ専用</div>
             <div class="text-base sm:text-lg font-black leading-snug break-words">出欠＆練習予定ダッシュボード</div>
           </div>
         </div>
@@ -147,6 +147,17 @@
   </div>
 
   <script>
+    const CLUB_NAME = "運動教室"; // 教室名・クラブ名
+    const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
+
+    document.title = `${CLUB_NAME} 出欠管理ポータル`;
+    document.getElementById('portalTitle').textContent = `${CLUB_NAME} 出欠管理ポータル`;
+    document.getElementById('coachRoleLabel').textContent = `${COACH_TITLE}専用`;
+    document.querySelector('[data-action="line"][data-file="student.html"]').dataset.message =
+      `【${CLUB_NAME}】生徒用出欠送信ページです。こちらから出欠を入力してください！`;
+    document.querySelector('[data-action="line"][data-file="parent.html"]').dataset.message =
+      `【${CLUB_NAME}】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。`;
+
     function getFullTargetUrl(fileName) {
       const loc = window.location.href.split('?')[0].split('#')[0];
       const base = loc.substring(0, loc.lastIndexOf('/'));

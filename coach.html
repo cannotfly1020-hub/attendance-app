@@ -27,7 +27,7 @@
       window.addEventListener('load', fitAndroidViewport);
     })();
   </script>
-  <title>【指導者専用】出欠＆練習予定ダッシュボード</title>
+  <title>【コーチ専用】出欠＆練習予定ダッシュボード</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" href="icon.png">
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -58,11 +58,18 @@
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-2xl shrink-0">📋</span>
         <div class="min-w-0">
-          <h1 class="text-sm sm:text-lg font-bold leading-snug break-words">出欠＆練習予定管理（指導者用）</h1>
+          <h1 id="coachPortalTitle" class="text-sm sm:text-lg font-bold leading-snug break-words">【コーチ専用】出欠＆練習予定ダッシュボード</h1>
+          <span id="coachClubName" class="text-[11px] text-slate-300 font-semibold">運動教室</span>
           <span class="text-[11px] text-slate-400 font-semibold">スプレッドシート連携中</span>
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <button id="exportCsvBtn" type="button" class="min-h-[44px] text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-2 rounded-xl active:scale-95 transition border border-slate-700">
+          📥 CSV出力
+        </button>
+        <button id="openRosterBtn" type="button" class="min-h-[44px] text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl active:scale-95 transition shadow">
+          👥 名簿管理
+        </button>
         <button id="refreshBtn" class="min-h-[44px] text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-2 rounded-xl active:scale-95 transition border border-slate-700">
           🔄 最新化
         </button>
@@ -105,11 +112,25 @@
           </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">練習内容・持ち物・連絡事項（生徒・保護者へ公開）</label>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">📢 おしらせの見出し・発信者</label>
+            <input type="text" id="schAnnounceInput" list="announceSuggestions" placeholder="例: コーチからのおしらせ / 保護者会より / 事務局より"
+              class="w-full min-w-0 border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white">
+            <datalist id="announceSuggestions"></datalist>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">練習内容・連絡事項（生徒・保護者へ公開）</label>
+            <input type="text" id="schDescInput" placeholder="例: 走りの基本ドリル＆ミニゲーム"
+              class="w-full min-w-0 border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">🎒 特別な持ち物</label>
+            <p class="text-[11px] text-amber-700 font-bold mb-1 leading-relaxed">※入力した日だけ生徒・保護者画面に目立つ警告が表示されます</p>
+            <input type="text" id="schItemsInput" placeholder="例: 縄跳び、体育館シューズ（※持ち物がある日のみ入力）"
+              class="w-full min-w-0 border border-amber-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-500 bg-amber-50/40">
+          </div>
           <div class="flex flex-wrap gap-2">
-            <input type="text" id="schDescInput" placeholder="例: 体育館シューズ持参 / JUMPトレーニング＆ゲーム" 
-              class="w-full min-w-0 basis-full sm:flex-1 sm:basis-0 border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white">
             <button id="saveScheduleBtn" class="min-h-[44px] bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-4 py-2 rounded-xl active:scale-95 transition shrink-0">
               予定を保存
             </button>
@@ -194,6 +215,21 @@
     </div>
   </div>
 
+  <div id="rosterModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md shrink-0 rounded-2xl shadow-xl flex flex-col max-h-[85vh]">
+      <div class="flex justify-between items-center gap-3 border-b px-5 py-3">
+        <h3 id="rosterCountLabel" class="font-bold text-slate-800 text-sm leading-snug">生徒名簿の管理（現在 0名登録中）</h3>
+        <button type="button" id="closeRosterBtn" class="shrink-0 text-slate-400 hover:text-slate-600 text-lg leading-none font-bold min-h-[44px] min-w-[44px]" aria-label="閉じる">✕</button>
+      </div>
+      <div class="px-5 py-3 flex flex-wrap gap-2">
+        <input type="text" id="rosterNameInput" placeholder="生徒のフルネーム（例: 佐藤 健太）"
+          class="min-w-0 flex-1 basis-[12rem] border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold">
+        <button type="button" id="addStudentBtn" class="min-h-[44px] shrink-0 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-4 rounded-xl active:scale-95 transition">追加</button>
+      </div>
+      <div id="rosterList" class="overflow-y-auto px-5 pb-4 min-h-[8rem]"></div>
+    </div>
+  </div>
+
   <!-- 手動代理登録モーダル -->
   <div id="manualModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
     <div class="bg-white w-full max-w-md shrink-0 rounded-2xl p-5 space-y-4 shadow-xl">
@@ -231,6 +267,13 @@
   </div>
 
   <script>
+    const CLUB_NAME = "運動教室"; // 教室名・クラブ名
+    const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
+    const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
+    document.title = `【${COACH_TITLE}専用】出欠＆練習予定ダッシュボード`;
+    document.getElementById('coachClubName').textContent = CLUB_NAME;
+    document.getElementById('coachPortalTitle').textContent = `【${COACH_TITLE}専用】出欠＆練習予定ダッシュボード`;
+
     const firebaseConfig = {
       apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
       authDomain: "attendance-app-3092a.firebaseapp.com",
@@ -247,6 +290,9 @@
 
     let attendanceMap = {};
     let schedulesMap = {};
+    let studentsMap = {};
+    let studentsReady = false;
+    const ROSTER_SEED_KEY = 'sports_app_students_seeded';
     let currentScheduleStatus = '通常練習';
     let manualSelectedStatus = '出席';
     let scheduleFormDirty = false;
@@ -295,18 +341,20 @@
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
     }
 
-    function schedulePayload(date, status, description) {
+    function schedulePayload(date, status, description, itemsToBring, announcementTitle) {
       return {
         date: date,
         status: status,
+        announcementTitle: announcementTitle || DEFAULT_ANNOUNCEMENT_TITLE,
         description: description || '',
+        itemsToBring: itemsToBring || '',
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
     }
 
-    async function saveSchedule(date, status, description) {
+    async function saveSchedule(date, status, description, itemsToBring, announcementTitle) {
       const dateStr = normalizeDateKey(date);
-      await db.collection('schedules').doc(dateStr).set(schedulePayload(dateStr, status, description));
+      await db.collection('schedules').doc(dateStr).set(schedulePayload(dateStr, status, description, itemsToBring, announcementTitle));
     }
 
     async function saveAttendance(name, date, status, note, source) {
@@ -333,7 +381,9 @@
           next[date] = {
             date: date,
             status: item.status || '通常練習',
-            description: item.description || ''
+            description: item.description || '',
+            itemsToBring: String(item.itemsToBring || '').trim(),
+            announcementTitle: String(item.announcementTitle || '').trim()
           };
         });
         schedulesMap = next;
@@ -357,26 +407,170 @@
           };
         });
         attendanceMap = next;
-        populateDatalist();
         renderDashboard();
       }, (err) => {
         console.error(err);
         showToast('出欠を読み込めませんでした。通信環境を確認してください。', true);
+      });
+
+      db.collection('students').onSnapshot((snap) => {
+        const next = {};
+        snap.forEach(doc => {
+          const item = doc.data() || {};
+          const normalizedName = item.normalizedName || doc.id;
+          if (!item.name || !normalizedName) return;
+          next[normalizedName] = {
+            name: item.name,
+            normalizedName: normalizedName
+          };
+        });
+        studentsMap = next;
+        studentsReady = true;
+        populateDatalist();
+        renderRoster();
+      }, (err) => {
+        console.error(err);
+        showToast('名簿を読み込めませんでした。通信環境を確認してください。', true);
       });
     }
 
     function populateDatalist() {
       const dl = document.getElementById('allStudentNames');
       dl.innerHTML = '';
-      const names = new Set();
+      Object.values(studentsMap)
+        .map(student => student.name)
+        .sort((a, b) => a.localeCompare(b, 'ja'))
+        .forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          dl.appendChild(opt);
+        });
+    }
+
+    function renderRoster() {
+      const list = document.getElementById('rosterList');
+      const students = Object.values(studentsMap).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+      document.getElementById('rosterCountLabel').textContent = `生徒名簿の管理（現在 ${students.length}名登録中）`;
+      list.innerHTML = '';
+      if (students.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-xs text-slate-400 text-center py-6';
+        empty.textContent = '登録されている生徒はいません';
+        list.appendChild(empty);
+        return;
+      }
+      students.forEach(student => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between gap-2 py-2.5 border-b border-slate-100';
+        const name = document.createElement('span');
+        name.className = 'text-sm font-bold text-slate-800 break-words min-w-0';
+        name.textContent = student.name;
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'shrink-0 text-xs font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg active:scale-95 transition';
+        del.textContent = '削除（退会）';
+        del.addEventListener('click', () => deleteStudent(student));
+        row.append(name, del);
+        list.appendChild(row);
+      });
+    }
+
+    async function addStudent(name) {
+      const trimmed = (name || '').trim();
+      const normalizedName = normalizeName(trimmed);
+      if (!trimmed || !normalizedName) {
+        showToast('生徒名を入力してください。', true);
+        return;
+      }
+      if (studentsMap[normalizedName]) {
+        showToast('すでに名簿に登録されています。', true);
+        return false;
+      }
+      await db.collection('students').doc(normalizedName).set({
+        name: trimmed,
+        normalizedName: normalizedName,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast(`${trimmed} さんを名簿に追加しました`);
+      return true;
+    }
+
+    async function deleteStudent(student) {
+      const ok = confirm(`${student.name}さんを名簿から削除（退会）しますか？`);
+      if (!ok) return;
+      try {
+        await db.collection('students').doc(student.normalizedName).delete();
+        showToast(`${student.name}さんを名簿から削除しました`);
+      } catch (err) {
+        console.error(err);
+        showToast('名簿の削除に失敗しました。通信環境を確認してください。', true);
+      }
+    }
+
+    async function seedStudentsFromAttendance() {
+      if (!studentsReady || localStorage.getItem(ROSTER_SEED_KEY) === '1') return;
+      if (Object.keys(studentsMap).length > 0) {
+        localStorage.setItem(ROSTER_SEED_KEY, '1');
+        return;
+      }
+      const seen = new Set();
+      const batch = db.batch();
+      let count = 0;
       Object.values(attendanceMap).forEach(item => {
-        if (item && item.name) names.add(item.name);
+        const name = (item && item.name ? item.name : '').trim();
+        const normalizedName = (item && item.normalizedName) || normalizeName(name);
+        if (!name || !normalizedName || name === '【練習予定】' || seen.has(normalizedName)) return;
+        seen.add(normalizedName);
+        batch.set(db.collection('students').doc(normalizedName), {
+          name: name,
+          normalizedName: normalizedName,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        count += 1;
       });
-      names.forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n;
-        dl.appendChild(opt);
+      if (count > 0) await batch.commit();
+      localStorage.setItem(ROSTER_SEED_KEY, '1');
+    }
+
+    function csvCell(value) {
+      const text = String(value ?? '');
+      if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+      return text;
+    }
+
+    function downloadAttendanceCsv() {
+      const rows = Object.values(attendanceMap).sort((a, b) => {
+        const byDate = String(a.date || '').localeCompare(String(b.date || ''));
+        if (byDate !== 0) return byDate;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
       });
+      if (rows.length === 0) {
+        showToast('出力できる出欠データがありません。', true);
+        return;
+      }
+      const lines = ['日付,生徒名,出欠,理由/メモ,登録元,登録日時'];
+      rows.forEach(item => {
+        lines.push([
+          item.date || '',
+          item.name || '',
+          item.status || '',
+          item.note || '',
+          item.source || '',
+          item.updatedAt || ''
+        ].map(csvCell).join(','));
+      });
+      const today = formatDate(new Date()).replace(/-/g, '');
+      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+      const blob = new Blob([bom, lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${CLUB_NAME}_出欠集計_${today}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast('出欠CSVをダウンロードしました！');
     }
 
     function updateScheduleUI() {
@@ -411,9 +605,13 @@
         if (schedule) {
           currentScheduleStatus = schedule.status;
           document.getElementById('schDescInput').value = schedule.description || '';
+          document.getElementById('schItemsInput').value = schedule.itemsToBring || '';
+          document.getElementById('schAnnounceInput').value = schedule.announcementTitle || DEFAULT_ANNOUNCEMENT_TITLE;
         } else {
           currentScheduleStatus = '通常練習';
           document.getElementById('schDescInput').value = '';
+          document.getElementById('schItemsInput').value = '';
+          document.getElementById('schAnnounceInput').value = DEFAULT_ANNOUNCEMENT_TITLE;
         }
       }
       updateScheduleUI();
@@ -461,7 +659,7 @@
       } else if (item.source === 'student') {
         sourceLabel = '<span class="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-bold">本人</span>';
       } else if (item.source === 'coach') {
-        sourceLabel = '<span class="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold">指導者</span>';
+        sourceLabel = `<span class="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold">${COACH_TITLE}</span>`;
       }
 
       const noteBlock = item.note 
@@ -512,6 +710,13 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      const announceList = document.getElementById('announceSuggestions');
+      [DEFAULT_ANNOUNCEMENT_TITLE, '指導者より', '保護者会より', '当番より', '緊急連絡'].forEach(label => {
+        const option = document.createElement('option');
+        option.value = label;
+        announceList.appendChild(option);
+      });
+
       const picker = document.getElementById('targetDatePicker');
       picker.value = formatDate(new Date());
 
@@ -536,7 +741,15 @@
         setTimeout(() => refreshBtn.classList.remove('opacity-50'), 200);
       });
 
+      document.getElementById('schAnnounceInput').addEventListener('input', () => {
+        scheduleFormDirty = true;
+      });
+
       document.getElementById('schDescInput').addEventListener('input', () => {
+        scheduleFormDirty = true;
+      });
+
+      document.getElementById('schItemsInput').addEventListener('input', () => {
         scheduleFormDirty = true;
       });
 
@@ -602,6 +815,8 @@
           const sourceDate = picker.value;
           if (!sourceDate) return;
           const desc = document.getElementById('schDescInput').value.trim();
+          const items = document.getElementById('schItemsInput').value.trim();
+          const announcementTitle = document.getElementById('schAnnounceInput').value.trim() || DEFAULT_ANNOUNCEMENT_TITLE;
           const status = currentScheduleStatus;
           const isNextWeek = option.dataset.copy === 'next-week';
           const targets = isNextWeek
@@ -621,7 +836,7 @@
             const batch = db.batch();
             targets.forEach(date => {
               const dateStr = normalizeDateKey(date);
-              batch.set(db.collection('schedules').doc(dateStr), schedulePayload(dateStr, status, desc), { merge: true });
+              batch.set(db.collection('schedules').doc(dateStr), schedulePayload(dateStr, status, desc, items, announcementTitle), { merge: true });
             });
             await batch.commit();
             showToast(isNextWeek ? '来週同曜日の予定をコピーしました！' : '向こう7日間の予定を一括コピーしました！');
@@ -639,13 +854,15 @@
       document.getElementById('saveScheduleBtn').addEventListener('click', async () => {
         const date = picker.value;
         const desc = document.getElementById('schDescInput').value.trim();
+        const items = document.getElementById('schItemsInput').value.trim();
+        const announcementTitle = document.getElementById('schAnnounceInput').value.trim() || DEFAULT_ANNOUNCEMENT_TITLE;
         const btn = document.getElementById('saveScheduleBtn');
 
         btn.disabled = true;
         btn.innerText = '保存中...';
 
         try {
-          await saveSchedule(date, currentScheduleStatus, desc);
+          await saveSchedule(date, currentScheduleStatus, desc, items, announcementTitle);
           scheduleFormDirty = false;
           showToast(`${date} の練習予定を保存しました！`);
         } catch (err) {
@@ -655,6 +872,53 @@
           btn.disabled = false;
           btn.innerText = '予定を保存';
         }
+      });
+
+      document.getElementById('exportCsvBtn').addEventListener('click', downloadAttendanceCsv);
+
+      const rosterModal = document.getElementById('rosterModal');
+      const openRoster = async () => {
+        rosterModal.classList.remove('hidden');
+        rosterModal.classList.add('flex');
+        const started = Date.now();
+        while (!studentsReady && Date.now() - started < 8000) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        try {
+          await seedStudentsFromAttendance();
+        } catch (err) {
+          console.error(err);
+          showToast('過去の出欠から名簿を取り込めませんでした。', true);
+        }
+        renderRoster();
+        document.getElementById('rosterNameInput').focus();
+      };
+      const closeRoster = () => {
+        rosterModal.classList.add('hidden');
+        rosterModal.classList.remove('flex');
+      };
+      document.getElementById('openRosterBtn').addEventListener('click', openRoster);
+      document.getElementById('closeRosterBtn').addEventListener('click', closeRoster);
+
+      document.getElementById('addStudentBtn').addEventListener('click', async () => {
+        const input = document.getElementById('rosterNameInput');
+        const btn = document.getElementById('addStudentBtn');
+        btn.disabled = true;
+        btn.textContent = '追加中...';
+        try {
+          const added = await addStudent(input.value);
+          if (added) input.value = '';
+        } catch (err) {
+          console.error(err);
+          showToast('名簿への追加に失敗しました。通信環境を確認してください。', true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '追加';
+        }
+      });
+
+      document.getElementById('rosterNameInput').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') document.getElementById('addStudentBtn').click();
       });
 
       // 代理モーダル

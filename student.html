@@ -53,6 +53,7 @@
 
     <!-- タイトル -->
     <div class="text-center">
+      <p id="studentClubName" class="text-[11px] font-black text-amber-800">運動教室</p>
       <h1 class="text-xl sm:text-2xl font-black text-amber-900 tracking-wide flex flex-wrap items-center justify-center gap-2 leading-tight">
         <span>🏃‍♂️</span> <span>れんしゅう出欠チェック</span>
       </h1>
@@ -74,9 +75,11 @@
       <div id="studentDateButtons" class="grid grid-cols-4 sm:grid-cols-7 gap-2 w-full min-w-0 overflow-x-auto"></div>
     </div>
 
+    <div id="studentItemsAlert" class="hidden" role="status"></div>
+
     <!-- せんせいからのおしらせ（常設） -->
     <div id="studentScheduleBanner" class="w-full p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/80 text-amber-900 shadow-sm" aria-live="polite">
-      <div id="studentScheduleTitle" class="font-black text-sm">せんせいからのおしらせ</div>
+      <div id="studentScheduleTitle" class="font-black text-sm">コーチからのおしらせ</div>
       <div id="studentScheduleBody" class="text-sm mt-1 leading-relaxed">よみこみちゅう...</div>
     </div>
 
@@ -103,6 +106,13 @@
   </div>
 
   <script>
+    const CLUB_NAME = "運動教室"; // 教室名・クラブ名
+    const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
+    const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
+    document.title = `【生徒用】${CLUB_NAME} 出欠チェック`;
+    document.getElementById('studentClubName').textContent = CLUB_NAME;
+    document.getElementById('studentScheduleTitle').textContent = `${COACH_TITLE}からのおしらせ`;
+
     const firebaseConfig = {
       apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
       authDomain: "attendance-app-3092a.firebaseapp.com",
@@ -120,6 +130,7 @@
 
     let attendanceMap = {};
     let schedulesMap = {};
+    let studentsMap = {};
     let studentTargetDate = '';
     let schedulesReady = false;
 
@@ -149,7 +160,9 @@
           date: date,
           status: item.status || '通常練習',
           isOff: item.status === '休み',
-          description: String(item.description || '').trim()
+          description: String(item.description || '').trim(),
+          itemsToBring: String(item.itemsToBring || '').trim(),
+          announcementTitle: String(item.announcementTitle || '').trim()
         };
       });
       schedulesMap = next;
@@ -167,7 +180,6 @@
         next[doc.id] = date ? { ...item, date: date } : item;
       });
       attendanceMap = next;
-      renderNameSuggestions();
       renderDateButtons();
     }
 
@@ -179,6 +191,18 @@
         showStudentError('予定を読み込めませんでした。通信環境を確認してください。');
       });
       db.collection('attendance').onSnapshot(applyAttendanceSnapshot, (err) => {
+        console.error(err);
+      });
+      db.collection('students').onSnapshot((snap) => {
+        const next = {};
+        snap.forEach(doc => {
+          const item = doc.data() || {};
+          if (!item.name) return;
+          next[item.normalizedName || doc.id] = item.name;
+        });
+        studentsMap = next;
+        renderNameSuggestions();
+      }, (err) => {
         console.error(err);
       });
     }
@@ -296,16 +320,30 @@
       });
     }
 
+    function renderStudentItemsAlert(schedule) {
+      const alert = document.getElementById('studentItemsAlert');
+      const items = schedule && schedule.itemsToBring ? String(schedule.itemsToBring).trim() : '';
+      if (!schedulesReady || !items) {
+        alert.className = 'hidden';
+        alert.textContent = '';
+        return;
+      }
+      const when = normalizeDateKey(studentTargetDate) === formatDate(new Date()) ? 'きょうのもちもの' : 'この日のもちもの';
+      alert.className = 'bg-amber-100 border-2 border-amber-400 text-amber-950 p-3.5 rounded-xl font-black flex items-center gap-2 shadow-sm animate-pulse';
+      alert.textContent = `🎒【わすれもの注意！】${when}: ${items}`;
+    }
+
     function renderScheduleBanner() {
       const banner = document.getElementById('studentScheduleBanner');
       const title = document.getElementById('studentScheduleTitle');
       const body = document.getElementById('studentScheduleBody');
       const schedule = schedulesMap[normalizeDateKey(studentTargetDate)];
+      renderStudentItemsAlert(schedule);
 
       if (!schedulesReady) {
         banner.className = 'p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/80 text-amber-900 shadow-sm';
         title.className = 'font-black text-sm';
-        title.textContent = 'せんせいからのおしらせ';
+        title.textContent = DEFAULT_ANNOUNCEMENT_TITLE;
         body.className = 'text-sm mt-1 leading-relaxed';
         body.textContent = 'よみこみちゅう...';
         setStudentActionsLocked(true);
@@ -322,12 +360,13 @@
         return;
       }
 
-      if (schedule && schedule.description) {
+      if (schedule && (schedule.description || (String(schedule.announcementTitle || '').trim() && String(schedule.announcementTitle).trim() !== DEFAULT_ANNOUNCEMENT_TITLE))) {
+        const heading = String(schedule.announcementTitle || '').trim() || DEFAULT_ANNOUNCEMENT_TITLE;
         banner.className = 'p-4 rounded-2xl border-2 bg-blue-50 border-blue-300 text-blue-950 shadow-sm';
         title.className = 'font-black text-base leading-snug';
-        title.textContent = '📢 先生からの連絡・もちもの';
+        title.textContent = `📢 ${heading}`;
         body.className = 'text-sm sm:text-base font-bold mt-2 leading-relaxed break-words';
-        body.textContent = schedule.description;
+        body.textContent = schedule.description || '';
         setStudentActionsLocked(false);
         return;
       }
@@ -343,15 +382,13 @@
     function renderNameSuggestions() {
       const dl = document.getElementById('studentNameSuggestions');
       dl.innerHTML = '';
-      const names = new Set();
-      Object.values(attendanceMap).forEach(item => {
-        if (item && item.name) names.add(item.name);
-      });
-      names.forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n;
-        dl.appendChild(opt);
-      });
+      Object.values(studentsMap)
+        .sort((a, b) => a.localeCompare(b, 'ja'))
+        .forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          dl.appendChild(opt);
+        });
     }
 
     function escapeHtml(value) {

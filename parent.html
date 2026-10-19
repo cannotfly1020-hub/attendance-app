@@ -56,7 +56,7 @@
   <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-30">
     <div class="w-full max-w-md mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
       <h1 class="text-base sm:text-lg font-bold flex items-center gap-2 min-w-0 leading-tight break-words">
-        <span>🏃‍♂️</span> 運動教室 保護者ポータル
+        <span>🏃‍♂️</span> <span id="parentPortalTitle">運動教室 保護者ポータル</span>
       </h1>
       <span class="text-[11px] bg-indigo-700/80 px-2 py-0.5 rounded-full text-indigo-100 font-semibold flex items-center gap-1 shrink-0">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span> 接続中
@@ -146,6 +146,12 @@
   </div>
 
   <script>
+    const CLUB_NAME = "運動教室"; // 教室名・クラブ名
+    const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
+    const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
+    document.title = `【保護者用】${CLUB_NAME} 出欠管理ポータル`;
+    document.getElementById('parentPortalTitle').textContent = `${CLUB_NAME} 保護者ポータル`;
+
     const firebaseConfig = {
       apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
       authDomain: "attendance-app-3092a.firebaseapp.com",
@@ -163,6 +169,7 @@
 
     let attendanceMap = {};
     let schedulesMap = {};
+    let studentsMap = {};
     let selectedDate = null;
     let selectedStatus = '出席';
 
@@ -193,7 +200,9 @@
             date: date,
             status: item.status || '通常練習',
             isOff: item.status === '休み',
-            description: String(item.description || '').trim()
+            description: String(item.description || '').trim(),
+            itemsToBring: String(item.itemsToBring || '').trim(),
+            announcementTitle: String(item.announcementTitle || '').trim()
           };
         });
         schedulesMap = next;
@@ -216,6 +225,19 @@
       }, (err) => {
         console.error(err);
         showToast('出欠を読み込めませんでした。通信環境を確認してください。', true);
+      });
+
+      db.collection('students').onSnapshot((snap) => {
+        const next = {};
+        snap.forEach(doc => {
+          const item = doc.data() || {};
+          if (!item.name) return;
+          next[item.normalizedName || doc.id] = item.name;
+        });
+        studentsMap = next;
+        renderNameChips();
+      }, (err) => {
+        console.error(err);
       });
     }
 
@@ -303,12 +325,17 @@
         if (!schedule) continue;
         const off = isPracticeOff(schedule);
         const description = (schedule.description || '').trim();
-        if (!off && !description) continue;
+        const items = (schedule.itemsToBring || '').trim();
+        const announce = (schedule.announcementTitle || '').trim();
+        const customAnnounce = announce && announce !== DEFAULT_ANNOUNCEMENT_TITLE;
+        if (!off && !description && !items && !customAnnounce) continue;
         picks.push({
           label: offset === 0 ? '今日' : '明日',
           dateStr: dateStr,
           off: off,
-          description: description
+          description: description,
+          items: items,
+          announce: customAnnounce ? announce : ''
         });
       }
 
@@ -334,13 +361,21 @@
         title.className = 'text-sm font-black leading-snug break-words';
         title.textContent = pick.off
           ? `🚫 ${pick.label}（${pick.dateStr}）は休講です`
-          : `📢 ${pick.label}（${pick.dateStr}）の連絡`;
+          : (pick.announce
+            ? `📢 ${pick.announce}（${pick.label}）`
+            : `📢 ${pick.label}（${pick.dateStr}）の連絡`);
         block.appendChild(title);
         if (pick.description) {
           const body = document.createElement('div');
           body.className = 'text-sm font-bold mt-1 leading-relaxed break-words';
           body.textContent = pick.description;
           block.appendChild(body);
+        }
+        if (pick.items) {
+          const badge = document.createElement('div');
+          badge.className = 'mt-1 text-sm font-black text-amber-950 break-words';
+          badge.textContent = `🎒 持ち物: ${pick.items}`;
+          block.appendChild(badge);
         }
         el.appendChild(block);
       });
@@ -350,14 +385,12 @@
       const chipsArea = document.getElementById('nameChipsArea');
       const chipsList = document.getElementById('nameChipsList');
       const datalist = document.getElementById('registeredStudentNames');
-      const uniqueNames = new Set();
-
-      Object.values(attendanceMap).forEach(item => {
-        if (item.name) uniqueNames.add(item.name);
-      });
+      const uniqueNames = new Set(Object.values(studentsMap));
 
       if (uniqueNames.size === 0) {
         chipsArea.classList.add('hidden');
+        chipsList.innerHTML = '';
+        datalist.innerHTML = '';
         return;
       }
 
@@ -435,14 +468,24 @@
             : 'この日は練習がありません';
           descLine = `<div class="text-sm font-bold text-rose-950 mt-1 leading-relaxed break-words">${reason}</div>`;
         } else if (schedule && schedule.description) {
-          descLine = `<div class="text-xs sm:text-sm text-indigo-600 font-semibold mt-1 leading-relaxed break-words">📌 練習内容・持参物: ${escapeHtml(schedule.description)}</div>`;
+          descLine = `<div class="text-xs sm:text-sm text-indigo-600 font-semibold mt-1 leading-relaxed break-words">📌 練習内容: ${escapeHtml(schedule.description)}</div>`;
+        }
+
+        if (schedule && (schedule.itemsToBring || '').trim()) {
+          descLine += `<div class="mt-1"><span class="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full text-xs font-black inline-flex items-center gap-1">🎒 持ち物: ${escapeHtml(schedule.itemsToBring.trim())}</span></div>`;
+        }
+
+        let announceBadge = '';
+        const announce = schedule && String(schedule.announcementTitle || '').trim();
+        if (announce && announce !== DEFAULT_ANNOUNCEMENT_TITLE) {
+          announceBadge = `<span class="bg-purple-100 text-purple-800 text-[10px] px-1.5 py-0.5 rounded font-bold">${escapeHtml(announce)}</span>`;
         }
 
         let sourceBadge = '';
         if (record && record.source === 'student') {
           sourceBadge = '<span class="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-1 py-0.5 rounded font-bold ml-1.5">本人入力</span>';
         } else if (record && record.source === 'coach') {
-          sourceBadge = '<span class="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1 py-0.5 rounded font-bold ml-1.5">指導者</span>';
+          sourceBadge = `<span class="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1 py-0.5 rounded font-bold ml-1.5">${COACH_TITLE}</span>`;
         }
 
         row.innerHTML = `
@@ -450,6 +493,7 @@
             <div class="text-sm flex flex-wrap items-center gap-1.5">
               <span class="${dayColor}">${day.dateStr}</span>
               <span class="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">${day.dayLabel}</span>
+              ${announceBadge}
               ${sourceBadge}
             </div>
             ${descLine}
@@ -474,8 +518,26 @@
 
       const notice = document.getElementById('modalScheduleNotice');
       notice.replaceChildren();
+      const items = schedule && schedule.itemsToBring ? String(schedule.itemsToBring).trim() : '';
+      const announce = schedule ? (String(schedule.announcementTitle || '').trim() || DEFAULT_ANNOUNCEMENT_TITLE) : '';
+      const appendSender = () => {
+        if (!announce) return;
+        const sender = document.createElement('div');
+        sender.className = announce === DEFAULT_ANNOUNCEMENT_TITLE
+          ? 'font-black text-sm leading-snug break-words'
+          : 'inline-flex bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded font-black';
+        sender.textContent = `📢 ${announce}`;
+        notice.prepend(sender);
+      };
+      const appendItemsWarning = () => {
+        if (!items) return;
+        const warn = document.createElement('div');
+        warn.className = 'font-black text-sm leading-relaxed break-words';
+        warn.textContent = `⚠️ 必要持参物: ${items}`;
+        notice.prepend(warn);
+      };
       if (isPracticeOff(schedule)) {
-        notice.className = 'rounded-xl border-2 border-rose-400 bg-rose-100 text-rose-950 p-3';
+        notice.className = 'rounded-xl border-2 border-rose-400 bg-rose-100 text-rose-950 p-3 space-y-2';
         const heading = document.createElement('div');
         heading.className = 'font-black text-sm sm:text-base';
         heading.textContent = 'この日は休講日です';
@@ -484,16 +546,26 @@
         body.className = 'text-sm font-bold mt-1 leading-relaxed break-words';
         body.textContent = (schedule && schedule.description) ? schedule.description : '練習休みのため、出欠の登録は不要です。';
         notice.appendChild(body);
+        appendItemsWarning();
+        appendSender();
       } else if (schedule && schedule.description) {
-        notice.className = 'rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-950 p-3';
+        notice.className = 'rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-950 p-3 space-y-2';
         const heading = document.createElement('div');
         heading.className = 'font-black text-sm';
-        heading.textContent = '練習内容・持参物';
+        heading.textContent = '練習内容';
         notice.appendChild(heading);
         const body = document.createElement('div');
         body.className = 'text-sm font-bold mt-1 leading-relaxed break-words';
         body.textContent = schedule.description;
         notice.appendChild(body);
+        appendItemsWarning();
+        appendSender();
+      } else if (items || (announce && announce !== DEFAULT_ANNOUNCEMENT_TITLE)) {
+        notice.className = items
+          ? 'rounded-xl border-2 border-amber-400 bg-amber-100 text-amber-950 p-3 space-y-2'
+          : 'rounded-xl border-2 border-purple-300 bg-purple-50 text-purple-950 p-3 space-y-2';
+        appendItemsWarning();
+        appendSender();
       } else {
         notice.className = 'hidden';
       }
