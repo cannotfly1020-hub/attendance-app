@@ -4,7 +4,7 @@ const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
 let activeClubName = CLUB_NAME;
 document.title = `【${COACH_TITLE}専用】出欠＆練習予定ダッシュボード`;
 document.getElementById('coachClubName').textContent = CLUB_NAME;
-document.getElementById('coachPortalTitle').textContent = `【${COACH_TITLE}専用】出欠＆練習予定ダッシュボード`;
+document.getElementById('coachPortalTitle').textContent = '出欠＆練習予定ダッシュボード';
 
 let attendanceMap = {};
 let schedulesMap = {};
@@ -203,47 +203,6 @@ async function seedStudentsFromAttendance() {
   });
   if (count > 0) await batch.commit();
   localStorage.setItem(ROSTER_SEED_KEY, '1');
-}
-
-function csvCell(value) {
-  const text = String(value ?? '');
-  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
-}
-
-function downloadAttendanceCsv() {
-  const rows = Object.values(attendanceMap).sort((a, b) => {
-    const byDate = String(a.date || '').localeCompare(String(b.date || ''));
-    if (byDate !== 0) return byDate;
-    return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
-  });
-  if (rows.length === 0) {
-    showToast('出力できる出欠データがありません。', true);
-    return;
-  }
-  const lines = ['日付,生徒名,出欠,連絡事項,登録元,登録日時'];
-  rows.forEach(item => {
-    lines.push([
-      item.date || '',
-      item.name || '',
-      item.status || '',
-      item.note || '',
-      item.source || '',
-      item.updatedAt || ''
-    ].map(csvCell).join(','));
-  });
-  const today = formatDate(new Date()).replace(/-/g, '');
-  const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-  const blob = new Blob([bom, lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${activeClubName}_出欠集計_${today}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  showToast('出欠CSVをダウンロードしました！');
 }
 
 function updateScheduleUI() {
@@ -491,7 +450,25 @@ async function handleDeleteAttendanceItem(item, button) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('openClubNameBtn').addEventListener('click', openClubNameModal);
+  const settingsMenu = document.getElementById('settingsDropdownMenu');
+  const settingsBtn = document.getElementById('openSettingsMenuBtn');
+  const closeSettingsMenu = () => {
+    settingsMenu.classList.add('hidden');
+    settingsBtn.setAttribute('aria-expanded', 'false');
+  };
+  const toggleSettingsMenu = () => {
+    const open = settingsMenu.classList.toggle('hidden') === false;
+    settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  settingsBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleSettingsMenu();
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('#settingsMenuWrap')) closeSettingsMenu();
+  });
+
   document.getElementById('closeClubNameBtn').addEventListener('click', closeClubNameModal);
   document.getElementById('clubNameModal').addEventListener('click', (event) => {
     if (event.target.id === 'clubNameModal') closeClubNameModal();
@@ -538,13 +515,6 @@ document.addEventListener('DOMContentLoaded', () => {
     d.setDate(d.getDate() + 1);
     picker.value = formatDate(d);
     renderDashboard();
-  });
-
-  document.getElementById('refreshBtn').addEventListener('click', () => {
-    const refreshBtn = document.getElementById('refreshBtn');
-    refreshBtn.classList.add('opacity-50');
-    renderDashboard();
-    setTimeout(() => refreshBtn.classList.remove('opacity-50'), 200);
   });
 
   document.getElementById('schAnnounceInput').addEventListener('input', () => {
@@ -685,10 +655,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('exportCsvBtn').addEventListener('click', downloadAttendanceCsv);
-
   const rosterModal = document.getElementById('rosterModal');
   const openRoster = async () => {
+    closeSettingsMenu();
     rosterModal.classList.remove('hidden');
     rosterModal.classList.add('flex');
     const started = Date.now();
@@ -708,7 +677,11 @@ document.addEventListener('DOMContentLoaded', () => {
     rosterModal.classList.add('hidden');
     rosterModal.classList.remove('flex');
   };
-  document.getElementById('openRosterBtn').addEventListener('click', openRoster);
+  document.getElementById('openRosterBtnFromMenu').addEventListener('click', openRoster);
+  document.getElementById('openClubNameBtnFromMenu').addEventListener('click', () => {
+    closeSettingsMenu();
+    openClubNameModal();
+  });
   document.getElementById('closeRosterBtn').addEventListener('click', closeRoster);
 
   document.getElementById('addStudentBtn').addEventListener('click', async () => {

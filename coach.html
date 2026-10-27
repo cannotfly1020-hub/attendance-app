@@ -56,33 +56,45 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen pb-16 overflow-x-hidden w-full font-sans">
 
-  <!-- ヘッダー -->
-  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30 border-b border-slate-800">
-    <div class="w-full max-w-md mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-2 min-w-0">
-        <span class="text-2xl shrink-0">📋</span>
+  <!-- 洗練されたスリムヘッダー -->
+  <header class="bg-slate-900 text-white shadow-sm sticky top-0 z-30 border-b border-slate-800/80">
+    <div class="w-full max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center text-lg shrink-0 shadow-inner">
+          📋
+        </div>
         <div class="min-w-0">
-          <h1 id="coachPortalTitle" class="text-sm sm:text-lg font-bold leading-snug break-words">【コーチ専用】出欠＆練習予定ダッシュボード</h1>
-          <span id="coachClubName" class="text-[11px] text-slate-300 font-semibold">運動教室</span>
-          <span class="text-[11px] text-slate-400 font-semibold">スプレッドシート連携中</span>
+          <h1 id="coachPortalTitle" class="text-sm font-bold text-white tracking-tight truncate">
+            出欠＆練習予定ダッシュボード
+          </h1>
+          <div class="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5 min-w-0">
+            <span id="coachClubName" class="font-bold text-slate-300 truncate">運動教室</span>
+            <span class="text-slate-600 shrink-0">・</span>
+            <span class="flex items-center gap-1 text-emerald-400 font-medium shrink-0">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              リアルタイム
+            </span>
+          </div>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button id="openClubNameBtn" type="button" class="min-h-[44px] text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2 rounded-xl border border-slate-700 active:scale-95 transition">
-          ⚙️ 教室名設定
+
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="openManualModalBtn" type="button" class="text-xs bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold px-3 py-2 rounded-xl transition shadow-sm flex items-center gap-1">
+          <span>＋</span> 代理登録
         </button>
-        <button id="exportCsvBtn" type="button" class="min-h-[44px] text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-2 rounded-xl active:scale-95 transition border border-slate-700">
-          📥 CSV出力
-        </button>
-        <button id="openRosterBtn" type="button" class="min-h-[44px] text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl active:scale-95 transition shadow">
-          👥 名簿管理
-        </button>
-        <button id="refreshBtn" class="min-h-[44px] text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-2 rounded-xl active:scale-95 transition border border-slate-700">
-          🔄 最新化
-        </button>
-        <button id="openManualModalBtn" class="min-h-[44px] text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-2 rounded-xl active:scale-95 transition shadow">
-          ＋ 代理登録
-        </button>
+        <div class="relative" id="settingsMenuWrap">
+          <button id="openSettingsMenuBtn" type="button" aria-label="管理メニュー" aria-haspopup="true" aria-expanded="false" class="w-9 h-9 flex items-center justify-center bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition">
+            ⚙️
+          </button>
+          <div id="settingsDropdownMenu" class="hidden absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-40 text-slate-700 text-xs font-bold divide-y divide-slate-100">
+            <button type="button" id="openRosterBtnFromMenu" class="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 flex items-center gap-2">
+              <span>👥</span> 生徒名簿の管理
+            </button>
+            <button type="button" id="openClubNameBtnFromMenu" class="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 flex items-center gap-2">
+              <span>🏷️</span> 教室名・呼称設定
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </header>
