@@ -71,78 +71,151 @@ async function deleteAttendance(docId) {
   await db.collection('attendance').doc(docId).delete();
 }
 
-async function addStudentMaster(name, kana) {
-  const trimmed = String(name || '').trim();
+function studentDocIdCandidates(normalizedName, preferredDocId) {
+  const ids = [];
+  const seen = new Set();
+  const push = (id) => {
+    const key = String(id || '');
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    ids.push(key);
+  };
+  push(preferredDocId);
+  push(typeof toStudentDocId === 'function' ? toStudentDocId(normalizedName) : normalizedName);
+  push(normalizedName);
+  return ids;
+}
+
+/**
+ * 生徒情報の追加（ふりがな対応・安全なドキュメントID）
+ */
+async function addStudentMaster(name, kana = '') {
+  const trimmedName = String(name || '').trim();
   const trimmedKana = String(kana || '').trim();
-  const normalizedName = normalizeName(trimmed);
-  if (!trimmed || !normalizedName) throw new Error('name is required');
-  const docId = toStudentDocId(normalizedName);
-  if (!docId) throw new Error('name is required');
-  const payload = {
-    name: trimmed,
+  const normalizedName = normalizeName(trimmedName);
+  if (!normalizedName) throw new Error('生徒名を入力してください');
+
+  const docId = (typeof toStudentDocId === 'function' ? toStudentDocId(normalizedName) : normalizedName) || normalizedName;
+  const docRef = db.collection('students').doc(docId);
+  await docRef.set({
+    name: trimmedName,
     kana: trimmedKana,
     normalizedName: normalizedName,
-    normalizedKana: normalizeKana(trimmedKana),
+    normalizedKana: typeof normalizeKana === 'function' ? normalizeKana(trimmedKana) : trimmedKana,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  await db.collection('students').doc(docId).set(payload, { merge: true });
+  }, { merge: true });
+
   return {
-    name: trimmed,
+    name: trimmedName,
     kana: trimmedKana,
     normalizedName: normalizedName,
-    normalizedKana: payload.normalizedKana,
+    normalizedKana: typeof normalizeKana === 'function' ? normalizeKana(trimmedKana) : trimmedKana,
     docId: docId
   };
 }
 
-async function updateStudentMaster(student, name, kana) {
-  const trimmed = String(name || '').trim();
-  const trimmedKana = String(kana || '').trim();
-  const newNormalizedName = normalizeName(trimmed);
-  if (!trimmed || !newNormalizedName) throw new Error('name is required');
-  if (!student) throw new Error('student is required');
+/**
+ * 生徒情報の更新・編集（名前変更時は旧ドキュメントの削除＋新規作成）
+ */
+async function updateStudentMaster(oldNormalizedName, newName, newKana = '') {
+  const trimmedNewName = String(newName || '').trim();
+  const trimmedNewKana = String(newKana || '').trim();
+  const newNormalizedName = normalizeName(trimmedNewName);
+  if (!newNormalizedName) throw new Error('生徒名を入力してください');
 
-  const oldNormalizedName = student.normalizedName || normalizeName(student.name);
-  const oldDocId = student.docId || toStudentDocId(oldNormalizedName);
-  const newDocId = toStudentDocId(newNormalizedName);
-  if (!oldDocId || !newDocId) throw new Error('invalid student id');
+  const oldNorm = String(oldNormalizedName || '').trim();
+  const newDocId = (typeof toStudentDocId === 'function' ? toStudentDocId(newNormalizedName) : newNormalizedName) || newNormalizedName;
+  const oldCandidates = studentDocIdCandidates(oldNorm);
 
-  const payload = {
-    name: trimmed,
-    kana: trimmedKana,
-    normalizedName: newNormalizedName,
-    normalizedKana: normalizeKana(trimmedKana),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-
-  if (oldDocId === newDocId) {
-    await db.collection('students').doc(oldDocId).set(payload, { merge: true });
-  } else {
-    await db.collection('students').doc(newDocId).set({
-      ...payload,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    await db.collection('students').doc(oldDocId).delete();
+  const batch = db.batch();
+  if (oldNorm && oldNorm !== newNormalizedName) {
+    oldCandidates.forEach(oldId => {
+      if (oldId && oldId !== newDocId) batch.delete(db.collection('students').doc(oldId));
+    });
   }
 
-  return {
-    name: trimmed,
-    kana: trimmedKana,
+  batch.set(db.collection('students').doc(newDocId), {
+    name: trimmedNewName,
+    kana: trimmedNewKana,
     normalizedName: newNormalizedName,
-    normalizedKana: payload.normalizedKana,
+    normalizedKana: typeof normalizeKana === 'function' ? normalizeKana(trimmedNewKana) : trimmedNewKana,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await batch.commit();
+  return {
+    name: trimmedNewName,
+    kana: trimmedNewKana,
+    normalizedName: newNormalizedName,
+    normalizedKana: typeof normalizeKana === 'function' ? normalizeKana(trimmedNewKana) : trimmedNewKana,
     docId: newDocId
   };
 }
 
-async function deleteStudentMaster(studentOrNormalizedName) {
-  let docId = '';
-  if (studentOrNormalizedName && typeof studentOrNormalizedName === 'object') {
-    const norm = studentOrNormalizedName.normalizedName || normalizeName(studentOrNormalizedName.name);
-    docId = studentOrNormalizedName.docId || toStudentDocId(norm);
-  } else {
-    docId = toStudentDocId(normalizeName(studentOrNormalizedName));
+/**
+ * 過去の出欠履歴（attendance）を全走査し、名簿（students）に未登録の名前を一括インポート
+ */
+async function syncStudentsFromAttendanceHistory() {
+  const [attSnap, stuSnap] = await Promise.all([
+    db.collection('attendance').get(),
+    db.collection('students').get()
+  ]);
+
+  const existingNormalized = new Set();
+  stuSnap.forEach(doc => {
+    const data = doc.data() || {};
+    const norm = data.normalizedName || normalizeName(data.name) || doc.id;
+    if (norm) {
+      existingNormalized.add(norm);
+      existingNormalized.add(doc.id);
+      if (typeof toStudentDocId === 'function') existingNormalized.add(toStudentDocId(norm));
+    }
+  });
+
+  const missingMap = new Map();
+  attSnap.forEach(doc => {
+    const item = doc.data() || {};
+    const rawName = String(item.name || '').trim();
+    const norm = item.normalizedName || normalizeName(rawName);
+    if (!rawName || !norm || rawName === '【練習予定】') return;
+    const safeId = typeof toStudentDocId === 'function' ? toStudentDocId(norm) : norm;
+    if (existingNormalized.has(norm) || (safeId && existingNormalized.has(safeId))) return;
+    if (!missingMap.has(norm)) missingMap.set(norm, rawName);
+  });
+
+  if (missingMap.size === 0) return 0;
+
+  const entries = Array.from(missingMap.entries());
+  const chunkSize = 400;
+  for (let i = 0; i < entries.length; i += chunkSize) {
+    const batch = db.batch();
+    entries.slice(i, i + chunkSize).forEach(([norm, rawName]) => {
+      const docId = (typeof toStudentDocId === 'function' ? toStudentDocId(norm) : norm) || norm;
+      batch.set(db.collection('students').doc(docId), {
+        name: rawName,
+        kana: '',
+        normalizedName: norm,
+        normalizedKana: '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
   }
-  if (!docId) throw new Error('normalizedName is required');
-  await db.collection('students').doc(docId).delete();
+  return missingMap.size;
+}
+
+async function deleteStudentMaster(studentOrNormalizedName) {
+  let preferredDocId = '';
+  let norm = '';
+  if (studentOrNormalizedName && typeof studentOrNormalizedName === 'object') {
+    norm = studentOrNormalizedName.normalizedName || normalizeName(studentOrNormalizedName.name);
+    preferredDocId = studentOrNormalizedName.docId || '';
+  } else {
+    norm = normalizeName(studentOrNormalizedName);
+  }
+  const candidates = studentDocIdCandidates(norm, preferredDocId);
+  if (candidates.length === 0) throw new Error('normalizedName is required');
+  await Promise.all(candidates.map(id => db.collection('students').doc(id).delete().catch(() => null)));
 }
