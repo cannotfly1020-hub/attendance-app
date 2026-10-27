@@ -96,9 +96,12 @@ function startLiveSync() {
       const item = doc.data() || {};
       const normalizedName = item.normalizedName || doc.id;
       if (!item.name || !normalizedName) return;
+      const kana = item.kana || '';
       next[normalizedName] = {
         name: item.name,
-        normalizedName: normalizedName
+        kana: kana,
+        normalizedName: normalizedName,
+        normalizedKana: item.normalizedKana || normalizeKana(kana)
       };
     });
     studentsMap = next;
@@ -142,6 +145,13 @@ function renderRoster() {
     const name = document.createElement('span');
     name.className = 'text-sm font-bold text-slate-800 break-words min-w-0';
     name.textContent = student.name;
+    const kana = String(student.kana || '').trim();
+    if (kana) {
+      const kanaSpan = document.createElement('span');
+      kanaSpan.className = 'text-xs text-slate-400 font-normal ml-1';
+      kanaSpan.textContent = `（${kana}）`;
+      name.appendChild(kanaSpan);
+    }
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'shrink-0 text-xs font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg active:scale-95 transition';
@@ -152,8 +162,9 @@ function renderRoster() {
   });
 }
 
-async function addStudent(name) {
+async function addStudent(name, kana) {
   const trimmed = (name || '').trim();
+  const trimmedKana = String(kana || '').trim();
   const normalizedName = normalizeName(trimmed);
   if (!trimmed || !normalizedName) {
     showToast('生徒名を入力してください。', true);
@@ -163,7 +174,7 @@ async function addStudent(name) {
     showToast('すでに名簿に登録されています。', true);
     return false;
   }
-  await addStudentMaster(trimmed);
+  await addStudentMaster(trimmed, trimmedKana);
   showToast(`${trimmed} さんを名簿に追加しました`);
   return true;
 }
@@ -686,12 +697,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('addStudentBtn').addEventListener('click', async () => {
     const input = document.getElementById('rosterNameInput');
+    const kanaInput = document.getElementById('rosterKanaInput');
     const btn = document.getElementById('addStudentBtn');
     btn.disabled = true;
     btn.textContent = '追加中...';
     try {
-      const added = await addStudent(input.value);
-      if (added) input.value = '';
+      const added = await addStudent(input.value, kanaInput ? kanaInput.value : '');
+      if (added) {
+        input.value = '';
+        if (kanaInput) kanaInput.value = '';
+      }
     } catch (err) {
       console.error(err);
       showToast('名簿への追加に失敗しました。通信環境を確認してください。', true);
@@ -701,9 +716,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('rosterNameInput').addEventListener('keydown', (event) => {
+  const submitRosterOnEnter = (event) => {
     if (event.key === 'Enter') document.getElementById('addStudentBtn').click();
-  });
+  };
+  document.getElementById('rosterNameInput').addEventListener('keydown', submitRosterOnEnter);
+  document.getElementById('rosterKanaInput').addEventListener('keydown', submitRosterOnEnter);
 
   // 代理モーダル
   const manualModal = document.getElementById('manualModal');

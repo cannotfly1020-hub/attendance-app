@@ -71,16 +71,26 @@ async function deleteAttendance(docId) {
   await db.collection('attendance').doc(docId).delete();
 }
 
-async function addStudentMaster(name) {
+async function addStudentMaster(name, kana) {
   const trimmed = String(name || '').trim();
+  const trimmedKana = String(kana || '').trim();
   const normalizedName = normalizeName(trimmed);
   if (!trimmed || !normalizedName) throw new Error('name is required');
-  await db.collection('students').doc(normalizedName).set({
+  const payload = {
     name: trimmed,
+    kana: trimmedKana,
     normalizedName: normalizedName,
+    normalizedKana: normalizeKana(trimmedKana),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  return { name: trimmed, normalizedName: normalizedName };
+  };
+  await db.collection('students').doc(normalizedName).set(payload);
+  return {
+    name: trimmed,
+    kana: trimmedKana,
+    normalizedName: normalizedName,
+    normalizedKana: payload.normalizedKana
+  };
 }
 
 async function deleteStudentMaster(normalizedName) {

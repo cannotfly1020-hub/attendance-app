@@ -12,6 +12,18 @@ function normalizeName(name) {
   return (name || '').replace(/[\s\u3000]+/g, '').trim();
 }
 
+/**
+ * カタカナをひらがなに変換し、空白を除去して正規化
+ */
+function normalizeKana(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[\s\u3000]+/g, '')
+    .replace(/[\u30a1-\u30f6]/g, match => String.fromCharCode(match.charCodeAt(0) - 0x60))
+    .toLowerCase()
+    .trim();
+}
+
 function normalizeDateKey(val) {
   if (!val) return '';
   const s = String(val).trim().replace(/\//g, '-');

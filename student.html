@@ -189,13 +189,53 @@
         snap.forEach(doc => {
           const item = doc.data() || {};
           if (!item.name) return;
-          next[item.normalizedName || doc.id] = item.name;
+          const kana = item.kana || '';
+          const normalizedName = item.normalizedName || doc.id;
+          next[normalizedName] = {
+            name: item.name,
+            kana: kana,
+            normalizedName: normalizedName,
+            normalizedKana: item.normalizedKana || normalizeKana(kana)
+          };
         });
         studentsMap = next;
         renderNameSuggestions();
+        renderDateButtons();
+        renderScheduleBanner();
       }, (err) => {
         console.error(err);
       });
+    }
+
+    /** 入力（漢字 / ひらがな / カタカナ）を名簿の正式氏名へ解決 */
+    function resolveStudentIdentity(rawInput) {
+      const input = String(rawInput || '').trim();
+      if (!input) return { name: '', normalizedName: '', displayName: '' };
+
+      const normName = normalizeName(input);
+      const students = Object.values(studentsMap);
+
+      for (let i = 0; i < students.length; i++) {
+        const student = students[i];
+        const sn = student.normalizedName || normalizeName(student.name);
+        if (sn && sn === normName) {
+          return { name: student.name, normalizedName: sn, displayName: student.name };
+        }
+      }
+
+      const normKana = normalizeKana(input);
+      if (normKana) {
+        for (let i = 0; i < students.length; i++) {
+          const student = students[i];
+          const sk = student.normalizedKana || normalizeKana(student.kana || '');
+          if (sk && sk === normKana) {
+            const sn = student.normalizedName || normalizeName(student.name);
+            return { name: student.name, normalizedName: sn, displayName: student.name };
+          }
+        }
+      }
+
+      return { name: input, normalizedName: normName, displayName: input };
     }
 
     function upcomingDays() {
@@ -213,8 +253,8 @@
     }
 
     function findOwnAttendance(dateStr) {
-      const name = document.getElementById('studentNameInput').value.trim();
-      const norm = normalizeName(name);
+      const identity = resolveStudentIdentity(document.getElementById('studentNameInput').value.trim());
+      const norm = identity.normalizedName;
       const target = normalizeDateKey(dateStr);
       if (!norm || !target) return null;
       const direct = attendanceMap[`${norm}_${target}`];
@@ -376,11 +416,18 @@
       const dl = document.getElementById('studentNameSuggestions');
       dl.innerHTML = '';
       Object.values(studentsMap)
-        .sort((a, b) => a.localeCompare(b, 'ja'))
-        .forEach(name => {
+        .slice()
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ja'))
+        .forEach(student => {
           const opt = document.createElement('option');
-          opt.value = name;
+          opt.value = student.name;
           dl.appendChild(opt);
+          const kana = String(student.kana || '').trim();
+          if (kana && normalizeKana(kana) !== normalizeKana(student.name)) {
+            const kanaOpt = document.createElement('option');
+            kanaOpt.value = kana;
+            dl.appendChild(kanaOpt);
+          }
         });
     }
 
@@ -394,7 +441,9 @@
 
     async function handleStudentSubmit(status) {
       const nameInput = document.getElementById('studentNameInput');
-      const name = nameInput.value.trim();
+      const rawName = nameInput.value.trim();
+      const identity = resolveStudentIdentity(rawName);
+      const formalName = identity.name;
       const alertBox = document.getElementById('studentResultAlert');
       const attendBtn = document.getElementById('studentAttendBtn');
       const absentBtn = document.getElementById('studentAbsentBtn');
@@ -405,27 +454,28 @@
       }
       if (status === '欠席' && absentBtn.disabled) return;
 
-      if (!name) {
+      if (!rawName || !formalName) {
         alertBox.className = 'p-3 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
         alertBox.innerText = '⚠️ おなまえを入力してください！';
         nameInput.focus();
         return;
       }
 
-      localStorage.setItem(STORAGE_KEY_STUDENT, name);
+      localStorage.setItem(STORAGE_KEY_STUDENT, rawName);
       attendBtn.disabled = true;
       absentBtn.disabled = true;
 
       try {
         await saveAttendance({
-          name: name,
+          name: formalName,
+          normalizedName: identity.normalizedName,
           date: studentTargetDate,
           status: status,
           note: '',
           source: 'student'
         });
         alertBox.className = 'p-4 rounded-xl text-center font-black text-sm bg-emerald-100 text-emerald-800 block';
-        alertBox.innerHTML = `✅ 送信しました！ <b>${escapeHtml(name)}さん</b>、${studentTargetDate} の出欠を【${escapeHtml(status)}】でおくりました！`;
+        alertBox.innerHTML = `✅ <b>${escapeHtml(formalName)}さん</b>、送信しました！ ${studentTargetDate} の出欠を【${escapeHtml(status)}】でおくりました！`;
       } catch (err) {
         alertBox.className = 'p-4 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
         alertBox.textContent = `⚠️ おくれませんでした。通信環境を確認してください。`;
