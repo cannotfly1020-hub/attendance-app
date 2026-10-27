@@ -32,6 +32,9 @@
   <link rel="icon" href="icon.png">
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -113,19 +116,6 @@
     document.getElementById('studentClubName').textContent = CLUB_NAME;
     document.getElementById('studentScheduleTitle').textContent = `${COACH_TITLE}からのおしらせ`;
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
-      authDomain: "attendance-app-3092a.firebaseapp.com",
-      projectId: "attendance-app-3092a",
-      storageBucket: "attendance-app-3092a.firebasestorage.app",
-      messagingSenderId: "1049451840444",
-      appId: "1:1049451840444:web:04d60e7e1f486cbffaa633"
-    };
-
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.firestore();
     const STORAGE_KEY_STUDENT = 'sports_app_student_kid';
 
     let attendanceMap = {};
@@ -133,16 +123,6 @@
     let studentsMap = {};
     let studentTargetDate = '';
     let schedulesReady = false;
-
-    function normalizeDateKey(val) {
-      if (!val) return '';
-      const s = String(val).trim().replace(/\//g, '-');
-      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-      if (m) {
-        return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-      }
-      return s;
-    }
 
     function showStudentError(message) {
       const alertBox = document.getElementById('studentResultAlert');
@@ -190,13 +170,7 @@
     }
 
     function startLiveSync() {
-      db.collection('settings').doc('general').onSnapshot((doc) => {
-        const data = doc.exists ? (doc.data() || {}) : {};
-        const clubName = data.clubName || CLUB_NAME;
-        updateClubNameDisplay(clubName);
-      }, () => {
-        updateClubNameDisplay(CLUB_NAME);
-      });
+      subscribeClubName(updateClubNameDisplay);
 
       db.collection('schedules').onSnapshot(applyScheduleSnapshot, (err) => {
         console.error(err);
@@ -221,43 +195,13 @@
       });
     }
 
-    async function saveAttendance(name, date, status, note, source) {
-      const normalizedName = normalizeName(name);
-      const dateStr = normalizeDateKey(date);
-      const docId = `${normalizedName}_${dateStr}`;
-      await db.collection('attendance').doc(docId).set({
-        name: name,
-        normalizedName: normalizedName,
-        date: dateStr,
-        status: status,
-        note: note || '',
-        source: source,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
-
-    function formatDate(d) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    function normalizeName(name) {
-      return (name || '').replace(/[\s\u3000]+/g, '').trim();
-    }
-
-    function weekdayLabel(dayIndex) {
-      return ['日', '月', '火', '水', '木', '金', '土'][dayIndex];
-    }
-
     function upcomingDays() {
       const days = [];
       for (let offset = 0; offset < 7; offset++) {
         const d = new Date();
         d.setDate(d.getDate() + offset);
         const dateStr = formatDate(d);
-        let label = `${d.getMonth() + 1}/${d.getDate()}(${weekdayLabel(d.getDay())})`;
+        let label = `${d.getMonth() + 1}/${d.getDate()}(${getDayLabel(d)})`;
         if (offset === 0) label = 'きょう';
         else if (offset === 1) label = 'あした';
         days.push({ dateStr: dateStr, label: label, day: d.getDay() });
@@ -434,7 +378,13 @@
       absentBtn.disabled = true;
 
       try {
-        await saveAttendance(name, studentTargetDate, status, '', 'student');
+        await saveAttendance({
+          name: name,
+          date: studentTargetDate,
+          status: status,
+          note: '',
+          source: 'student'
+        });
         alertBox.className = 'p-4 rounded-xl text-center font-black text-sm bg-emerald-100 text-emerald-800 block';
         alertBox.innerHTML = `✅ 送信しました！ <b>${escapeHtml(name)}さん</b>、${studentTargetDate} の出欠を【${escapeHtml(status)}】でおくりました！`;
       } catch (err) {

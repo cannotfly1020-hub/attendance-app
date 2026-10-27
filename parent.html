@@ -32,6 +32,9 @@
   <link rel="icon" href="icon.png">
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -152,19 +155,6 @@
 
     updateClubNameDisplay(CLUB_NAME);
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
-      authDomain: "attendance-app-3092a.firebaseapp.com",
-      projectId: "attendance-app-3092a",
-      storageBucket: "attendance-app-3092a.firebasestorage.app",
-      messagingSenderId: "1049451840444",
-      appId: "1:1049451840444:web:04d60e7e1f486cbffaa633"
-    };
-
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.firestore();
     const STORAGE_KEY_NAME = 'sports_app_parent_kid';
 
     let attendanceMap = {};
@@ -172,16 +162,6 @@
     let schedulesMap = {};
     let selectedDate = null;
     let selectedStatus = '出席';
-
-    function normalizeDateKey(val) {
-      if (!val) return '';
-      const s = String(val).trim().replace(/\//g, '-');
-      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-      if (m) {
-        return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-      }
-      return s;
-    }
 
     function syncAttendanceMapForCurrentChild() {
       const normKey = normalizeName(document.getElementById('studentNameInput').value.trim());
@@ -204,13 +184,7 @@
     }
 
     function startLiveSync() {
-      db.collection('settings').doc('general').onSnapshot((doc) => {
-        const data = doc.exists ? (doc.data() || {}) : {};
-        const clubName = data.clubName || CLUB_NAME;
-        updateClubNameDisplay(clubName);
-      }, () => {
-        updateClubNameDisplay(CLUB_NAME);
-      });
+      subscribeClubName(updateClubNameDisplay);
 
       db.collection('schedules').onSnapshot((snap) => {
         const next = {};
@@ -250,57 +224,12 @@
       });
     }
 
-    async function saveAttendance(name, date, status, note, source) {
-      const normalizedName = normalizeName(name);
-      const dateStr = normalizeDateKey(date);
-      await db.collection('attendance').doc(`${normalizedName}_${dateStr}`).set({
-        name: name,
-        normalizedName: normalizedName,
-        date: dateStr,
-        status: status,
-        note: note || '',
-        source: source,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
-
-    function normalizeName(name) {
-      return (name || '').replace(/[\s\u3000]+/g, '').trim();
-    }
-
     function escapeHtml(value) {
       return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-    }
-
-    function formatDate(d) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    function getDayLabel(d) {
-      return ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
-    }
-
-    function showToast(msg, isError = false) {
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = `p-3 rounded-xl shadow-lg border text-xs font-bold pointer-events-auto flex items-start gap-2 ${
-        isError ? 'bg-rose-900 text-rose-100 border-rose-700' : 'bg-slate-900 text-white border-slate-700'
-      }`;
-      const icon = document.createElement('span');
-      icon.textContent = isError ? '⚠️' : '✅';
-      const text = document.createElement('span');
-      text.className = 'leading-relaxed';
-      text.textContent = msg;
-      toast.append(icon, text);
-      container.appendChild(toast);
-      setTimeout(() => toast.remove(), isError ? 8000 : 3500);
     }
 
     function isPracticeOff(schedule) {
@@ -602,7 +531,13 @@
         btn.innerText = '保存中...';
 
         try {
-          await saveAttendance(studentName, selectedDate, selectedStatus, note, 'parent');
+          await saveAttendance({
+            name: studentName,
+            date: selectedDate,
+            status: selectedStatus,
+            note: note,
+            source: 'parent'
+          });
           localStorage.setItem(STORAGE_KEY_NAME, studentName);
           document.getElementById('statusModal').classList.add('hidden');
           showToast(`${selectedDate} の出欠を【${selectedStatus}】で保存しました！`);

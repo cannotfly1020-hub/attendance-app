@@ -32,6 +32,9 @@
   <link rel="icon" href="icon.png">
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -152,20 +155,6 @@
     const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
     const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAZCVAqpOXMjoKTz99netnxcsr2Yts8Rso",
-      authDomain: "attendance-app-3092a.firebaseapp.com",
-      projectId: "attendance-app-3092a",
-      storageBucket: "attendance-app-3092a.firebasestorage.app",
-      messagingSenderId: "1049451840444",
-      appId: "1:1049451840444:web:04d60e7e1f486cbffaa633"
-    };
-
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.firestore();
-
     function updateClubNameDisplay(name) {
       const next = String(name || '').trim() || CLUB_NAME;
       document.title = `${next} 出欠管理ポータル`;
@@ -182,29 +171,12 @@
 
     document.getElementById('coachRoleLabel').textContent = `${COACH_TITLE}専用`;
     updateClubNameDisplay(CLUB_NAME);
-
-    db.collection('settings').doc('general').onSnapshot((doc) => {
-      const data = doc.exists ? (doc.data() || {}) : {};
-      const clubName = data.clubName || CLUB_NAME;
-      updateClubNameDisplay(clubName);
-    }, (err) => {
-      console.error(err);
-      updateClubNameDisplay(CLUB_NAME);
-    });
+    subscribeClubName(updateClubNameDisplay);
 
     function getFullTargetUrl(fileName) {
       const loc = window.location.href.split('?')[0].split('#')[0];
       const base = loc.substring(0, loc.lastIndexOf('/'));
       return `${base}/${fileName}`;
-    }
-
-    function showToast(message) {
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = 'toast-pop pointer-events-auto px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg';
-      toast.textContent = message;
-      container.appendChild(toast);
-      setTimeout(() => toast.remove(), 2200);
     }
 
     function copyWithExecCommand(text) {
