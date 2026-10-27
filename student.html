@@ -86,6 +86,8 @@
       <div id="studentScheduleBody" class="text-sm mt-1 leading-relaxed">よみこみちゅう...</div>
     </div>
 
+    <div id="parentAbsenceLockNotice" class="hidden" role="status"></div>
+
     <!-- でる / やすむ ボタンエリア -->
     <div class="grid grid-cols-2 gap-4 pt-1 w-full min-w-0 overflow-x-auto">
       <button type="button" id="studentAttendBtn" class="min-h-[56px] bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white px-2 py-4 rounded-2xl shadow-md border-b-4 border-emerald-700 flex flex-col items-center justify-center gap-1 transition">
@@ -161,6 +163,7 @@
       });
       attendanceMap = next;
       renderDateButtons();
+      renderScheduleBanner();
     }
 
     function updateClubNameDisplay(name) {
@@ -270,12 +273,44 @@
       return !!(schedule && (schedule.status === '休み' || schedule.isOff));
     }
 
-    function setStudentActionsLocked(locked) {
-      [document.getElementById('studentAttendBtn'), document.getElementById('studentAbsentBtn')].forEach(btn => {
-        btn.disabled = locked;
-        btn.classList.toggle('opacity-40', locked);
-        btn.classList.toggle('cursor-not-allowed', locked);
-      });
+    function isParentAbsenceLock(dateStr) {
+      const record = findOwnAttendance(dateStr || studentTargetDate);
+      return !!(record && record.source === 'parent' && record.status === '欠席');
+    }
+
+    function setButtonVisualLocked(btn, locked) {
+      btn.disabled = locked;
+      btn.classList.toggle('opacity-40', locked);
+      btn.classList.toggle('cursor-not-allowed', locked);
+      btn.classList.toggle('pointer-events-none', locked);
+    }
+
+    function updateStudentActionButtons() {
+      const attendBtn = document.getElementById('studentAttendBtn');
+      const absentBtn = document.getElementById('studentAbsentBtn');
+      const lockNotice = document.getElementById('parentAbsenceLockNotice');
+      const schedule = schedulesMap[normalizeDateKey(studentTargetDate)];
+      const fullyLocked = !schedulesReady || isPracticeOff(schedule);
+      const parentAbsence = !fullyLocked && isParentAbsenceLock();
+
+      if (fullyLocked) {
+        setButtonVisualLocked(attendBtn, true);
+        setButtonVisualLocked(absentBtn, true);
+        lockNotice.className = 'hidden';
+        lockNotice.textContent = '';
+        return;
+      }
+
+      setButtonVisualLocked(absentBtn, false);
+      if (parentAbsence) {
+        setButtonVisualLocked(attendBtn, true);
+        lockNotice.className = 'p-3.5 rounded-2xl bg-slate-100 border-2 border-slate-300 text-slate-700 text-xs font-bold text-center flex items-center justify-center gap-1.5';
+        lockNotice.textContent = '🔒 おうちの人が「おやすみ」で連絡しています。出席にかえる場合は、おうちの人にお願いしてね！';
+      } else {
+        setButtonVisualLocked(attendBtn, false);
+        lockNotice.className = 'hidden';
+        lockNotice.textContent = '';
+      }
     }
 
     function renderStudentItemsAlert(schedule) {
@@ -304,7 +339,7 @@
         title.textContent = DEFAULT_ANNOUNCEMENT_TITLE;
         body.className = 'text-sm mt-1 leading-relaxed';
         body.textContent = 'よみこみちゅう...';
-        setStudentActionsLocked(true);
+        updateStudentActionButtons();
         return;
       }
 
@@ -314,7 +349,7 @@
         title.textContent = '🚫 この日の れんしゅうは【おやすみ】です';
         body.className = 'text-sm sm:text-base font-bold mt-2 leading-relaxed break-words';
         body.textContent = (schedule.description || '').trim() || 'この日のれんしゅうはお休みです。';
-        setStudentActionsLocked(true);
+        updateStudentActionButtons();
         return;
       }
 
@@ -325,7 +360,7 @@
         title.textContent = `📢 ${heading}`;
         body.className = 'text-sm sm:text-base font-bold mt-2 leading-relaxed break-words';
         body.textContent = schedule.description || '';
-        setStudentActionsLocked(false);
+        updateStudentActionButtons();
         return;
       }
 
@@ -334,7 +369,7 @@
       title.textContent = '🟢 通常どおり練習があります';
       body.className = 'text-xs mt-1 leading-relaxed';
       body.textContent = '';
-      setStudentActionsLocked(false);
+      updateStudentActionButtons();
     }
 
     function renderNameSuggestions() {
@@ -364,7 +399,11 @@
       const attendBtn = document.getElementById('studentAttendBtn');
       const absentBtn = document.getElementById('studentAbsentBtn');
 
-      if (attendBtn.disabled || absentBtn.disabled) return;
+      if (status === '出席' && (attendBtn.disabled || isParentAbsenceLock())) {
+        window.alert('おうちの人がお休みの連絡をしています。変更はおうちの人に頼んでね');
+        return;
+      }
+      if (status === '欠席' && absentBtn.disabled) return;
 
       if (!name) {
         alertBox.className = 'p-3 rounded-xl text-center font-bold text-sm bg-rose-100 text-rose-800 block';
@@ -401,7 +440,10 @@
       renderDateButtons();
       const saved = localStorage.getItem(STORAGE_KEY_STUDENT);
       if (saved) document.getElementById('studentNameInput').value = saved;
-      document.getElementById('studentNameInput').addEventListener('input', renderDateButtons);
+      document.getElementById('studentNameInput').addEventListener('input', () => {
+        renderDateButtons();
+        renderScheduleBanner();
+      });
 
       document.getElementById('studentAttendBtn').addEventListener('click', () => handleStudentSubmit('出席'));
       document.getElementById('studentAbsentBtn').addEventListener('click', () => handleStudentSubmit('欠席'));
