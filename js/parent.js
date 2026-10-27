@@ -13,7 +13,6 @@ updateClubNameDisplay(CLUB_NAME);
 const STORAGE_KEY_NAME_LEGACY = 'sports_app_parent_kid';
 const STORAGE_KEY_KIDS = 'sports_app_parent_kids';
 const STORAGE_KEY_ACTIVE = 'sports_app_parent_active_kid';
-const CHILD_ICONS = ['👦', '🧒', '👧', '🧑'];
 
 let attendanceMap = {};
 let attendanceRaw = {};
@@ -21,7 +20,7 @@ let schedulesMap = {};
 let selectedDate = null;
 let selectedStatus = '出席';
 let parentKids = [];
-let activeChildName = '';
+let currentSelectedChild = '';
 
 function dedupeKids(names) {
   const seen = new Set();
@@ -37,21 +36,15 @@ function dedupeKids(names) {
   return result;
 }
 
-function parseKidsInput(raw) {
-  return dedupeKids(String(raw || '').split(/[,、]/));
-}
-
 function getActiveChildName() {
-  const fromActive = String(activeChildName || '').trim();
-  if (fromActive) return fromActive;
-  return document.getElementById('studentNameInput').value.trim();
+  return String(currentSelectedChild || '').trim();
 }
 
 function persistParentKids() {
   localStorage.setItem(STORAGE_KEY_KIDS, JSON.stringify(parentKids));
-  if (activeChildName) {
-    localStorage.setItem(STORAGE_KEY_ACTIVE, activeChildName);
-    localStorage.setItem(STORAGE_KEY_NAME_LEGACY, activeChildName);
+  if (currentSelectedChild) {
+    localStorage.setItem(STORAGE_KEY_ACTIVE, currentSelectedChild);
+    localStorage.setItem(STORAGE_KEY_NAME_LEGACY, currentSelectedChild);
   } else {
     localStorage.removeItem(STORAGE_KEY_ACTIVE);
   }
@@ -76,118 +69,127 @@ function loadParentKids() {
 
   const savedActive = localStorage.getItem(STORAGE_KEY_ACTIVE) || localStorage.getItem(STORAGE_KEY_NAME_LEGACY) || '';
   const matched = parentKids.find(name => normalizeName(name) === normalizeName(savedActive));
-  activeChildName = matched || parentKids[0] || '';
+  currentSelectedChild = matched || parentKids[0] || '';
   persistParentKids();
 }
 
-function setActiveChild(name, options) {
-  const opts = options || {};
-  const next = String(name || '').trim();
-  activeChildName = next;
-  const input = document.getElementById('studentNameInput');
-  if (input && !opts.keepInput) input.value = next;
-  persistParentKids();
-  renderParentKidsTabs();
-  refreshParentViews();
-}
-
-function addOrSaveKidsFromInput() {
-  const input = document.getElementById('studentNameInput');
-  const parts = parseKidsInput(input.value);
-  if (parts.length === 0) {
-    showToast('お子さんのお名前を入力してください。', true);
-    input.focus();
-    return false;
+function showAddChildForm(forceOpen) {
+  const form = document.getElementById('addChildFormArea');
+  if (!form) return;
+  const shouldOpen = forceOpen === true || parentKids.length === 0;
+  if (shouldOpen) {
+    form.classList.remove('hidden');
+    const input = document.getElementById('newChildNameInput');
+    if (input) setTimeout(() => input.focus(), 0);
   }
+}
 
-  parts.forEach(name => {
-    const exists = parentKids.some(kid => normalizeName(kid) === normalizeName(name));
-    if (!exists) parentKids.push(name);
-  });
-  parentKids = dedupeKids(parentKids);
-  const last = parts[parts.length - 1];
-  const resolved = parentKids.find(kid => normalizeName(kid) === normalizeName(last)) || last;
-  setActiveChild(resolved);
-  showToast(
-    parts.length > 1
-      ? `${parts.length}名のお子さんを保存しました`
-      : `お子さんのお名前「${resolved}」を保存しました`
-  );
-  return true;
+function hideAddChildForm() {
+  if (parentKids.length === 0) return; // 0人のときは閉じない
+  const form = document.getElementById('addChildFormArea');
+  if (!form) return;
+  form.classList.add('hidden');
+  const input = document.getElementById('newChildNameInput');
+  if (input) input.value = '';
+}
+
+function toggleAddChildForm() {
+  const form = document.getElementById('addChildFormArea');
+  if (!form) return;
+  if (form.classList.contains('hidden')) {
+    showAddChildForm(true);
+  } else {
+    hideAddChildForm();
+  }
+}
+
+function setActiveChild(name) {
+  const next = String(name || '').trim();
+  currentSelectedChild = next;
+  persistParentKids();
+  renderChildrenTabs();
+  refreshParentViews();
 }
 
 function removeParentKid(name) {
   const key = normalizeName(name);
   if (!key) return;
-  const ok = confirm(`${name}さんのタブを外しますか？（出欠データ自体は消えません）`);
+  const ok = confirm(`${name}さんを一覧から削除しますか？`);
   if (!ok) return;
   parentKids = parentKids.filter(kid => normalizeName(kid) !== key);
-  if (normalizeName(activeChildName) === key) {
-    activeChildName = parentKids[0] || '';
+  if (normalizeName(currentSelectedChild) === key) {
+    currentSelectedChild = parentKids[0] || '';
   }
   persistParentKids();
-  const input = document.getElementById('studentNameInput');
-  if (input) input.value = activeChildName;
-  renderParentKidsTabs();
+  renderChildrenTabs();
   refreshParentViews();
-  showToast(`${name}さんの表示を外しました`);
+  if (parentKids.length === 0) showAddChildForm(true);
+  showToast(`${name}さんを一覧から削除しました`);
 }
 
-function startAddAnotherChild() {
-  const input = document.getElementById('studentNameInput');
-  input.value = '';
-  input.focus();
-  showToast('追加するお子さんのお名前を入力して「保存」を押してください');
-}
-
-function renderParentKidsTabs() {
-  const tabs = document.getElementById('parentKidsTabs');
-  if (!tabs) return;
-  tabs.innerHTML = '';
-
-  if (parentKids.length <= 1) {
-    tabs.className = 'hidden';
-    return;
+function confirmAddChild() {
+  const input = document.getElementById('newChildNameInput');
+  const name = String(input ? input.value : '').trim();
+  if (!name) {
+    showToast('お子さんのお名前を入力してください。', true);
+    if (input) input.focus();
+    return false;
   }
+  if (parentKids.some(kid => normalizeName(kid) === normalizeName(name))) {
+    showToast('すでに登録されているお子さんです。', true);
+    return false;
+  }
+  parentKids = dedupeKids(parentKids.concat([name]));
+  currentSelectedChild = name;
+  persistParentKids();
+  if (input) input.value = '';
+  hideAddChildForm();
+  renderChildrenTabs();
+  refreshParentViews();
+  showToast(`${name}さんを追加しました`);
+  return true;
+}
 
-  tabs.className = 'flex flex-wrap gap-2';
-  parentKids.forEach((name, index) => {
-    const selected = normalizeName(name) === normalizeName(activeChildName);
-    const wrap = document.createElement('div');
-    wrap.className = selected
-      ? 'inline-flex items-center gap-1 rounded-xl bg-indigo-600 text-white font-bold shadow-sm'
-      : 'inline-flex items-center gap-1 rounded-xl bg-slate-100 text-slate-700 border border-slate-300 font-bold';
+function renderChildrenTabs() {
+  const bar = document.getElementById('childrenTabBar');
+  const addBtn = document.getElementById('openAddChildBtn');
+  if (!bar || !addBtn) return;
 
-    const selectBtn = document.createElement('button');
-    selectBtn.type = 'button';
-    selectBtn.className = selected
-      ? 'px-3 py-2 text-xs sm:text-sm rounded-xl hover:bg-indigo-500 transition'
-      : 'px-3 py-2 text-xs sm:text-sm rounded-xl hover:bg-slate-200 transition';
-    selectBtn.textContent = `${CHILD_ICONS[index % CHILD_ICONS.length]} ${name}${selected ? '（選択中）' : ''}`;
-    selectBtn.addEventListener('click', () => setActiveChild(name));
+  Array.from(bar.querySelectorAll('[data-child-tab="1"]')).forEach(el => el.remove());
 
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = selected
-      ? 'pr-2.5 pl-1 py-2 text-xs text-indigo-100 hover:text-white'
-      : 'pr-2.5 pl-1 py-2 text-xs text-slate-400 hover:text-rose-600';
+  parentKids.forEach(name => {
+    const selected = normalizeName(name) === normalizeName(currentSelectedChild);
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.dataset.childTab = '1';
+    tab.className = selected
+      ? 'shrink-0 text-xs bg-indigo-600 text-white font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm'
+      : 'shrink-0 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition';
+
+    const label = document.createElement('span');
+    label.textContent = `👦 ${name}`;
+    tab.appendChild(label);
+
+    const removeBtn = document.createElement('span');
+    removeBtn.setAttribute('role', 'button');
     removeBtn.setAttribute('aria-label', `${name}を削除`);
+    removeBtn.className = selected
+      ? 'text-slate-300 hover:text-white text-[11px] leading-none pl-0.5'
+      : 'text-slate-400 hover:text-rose-600 text-[11px] leading-none pl-0.5';
     removeBtn.textContent = '✕';
     removeBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       removeParentKid(name);
     });
+    tab.appendChild(removeBtn);
 
-    wrap.append(selectBtn, removeBtn);
-    tabs.appendChild(wrap);
+    tab.addEventListener('click', () => setActiveChild(name));
+    bar.insertBefore(tab, addBtn);
   });
 
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.className = 'px-3 py-2 text-xs sm:text-sm rounded-xl bg-white text-indigo-700 border border-indigo-200 font-bold hover:bg-indigo-50 transition';
-  addBtn.textContent = '＋ お子さんを追加';
-  addBtn.addEventListener('click', startAddAnotherChild);
-  tabs.appendChild(addBtn);
+  if (parentKids.length === 0) {
+    showAddChildForm(true);
+  }
 }
 
 function syncAttendanceMapForCurrentChild() {
@@ -441,13 +443,13 @@ function renderList() {
 function openModal(dateStr, currentRecord, schedule) {
   const studentName = getActiveChildName();
   if (!studentName) {
-    showToast('先にお子さんのお名前を入力・保存してください。', true);
-    document.getElementById('studentNameInput').focus();
+    showToast('先にお子さんを追加・選択してください。', true);
+    showAddChildForm(true);
     return;
   }
 
   selectedDate = dateStr;
-  document.getElementById('modalDateTitle').textContent = `${studentName}さんの出欠登録（${dateStr}）`;
+  document.getElementById('modalDateTitle').textContent = `${studentName} さんの出欠登録（${dateStr}）`;
 
   const notice = document.getElementById('modalScheduleNotice');
   notice.replaceChildren();
@@ -531,9 +533,8 @@ function updateModalBtnUI() {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadParentKids();
-  const nameInput = document.getElementById('studentNameInput');
-  if (activeChildName) nameInput.value = activeChildName;
-  renderParentKidsTabs();
+  renderChildrenTabs();
+  if (parentKids.length === 0) showAddChildForm(true);
 
   const guideModal = document.getElementById('parentGuideModal');
   const openParentGuide = () => {
@@ -551,34 +552,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.target.id === 'parentGuideModal') closeParentGuide();
   });
 
-  document.getElementById('saveNameBtn').addEventListener('click', () => {
-    addOrSaveKidsFromInput();
-  });
-
-  nameInput.addEventListener('keydown', (event) => {
+  document.getElementById('openAddChildBtn').addEventListener('click', toggleAddChildForm);
+  document.getElementById('cancelAddChildBtn').addEventListener('click', hideAddChildForm);
+  document.getElementById('confirmAddChildBtn').addEventListener('click', confirmAddChild);
+  document.getElementById('newChildNameInput').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      addOrSaveKidsFromInput();
+      confirmAddChild();
     }
-  });
-
-  nameInput.addEventListener('change', () => {
-    const typed = nameInput.value.trim();
-    if (!typed) {
-      refreshParentViews();
-      return;
-    }
-    // 入力中の名前が登録済みなら選択を合わせる（未保存の一時プレビューも可）
-    const matched = parentKids.find(kid => normalizeName(kid) === normalizeName(typed));
-    if (matched) {
-      activeChildName = matched;
-      persistParentKids();
-      renderParentKidsTabs();
-    } else if (parentKids.length <= 1) {
-      // 1人だけの従来運用: 入力値をそのまま表示対象にする
-      activeChildName = typed;
-    }
-    refreshParentViews();
   });
 
   document.getElementById('closeModalBtn').addEventListener('click', () => {
@@ -593,12 +574,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('submitAttendanceBtn').addEventListener('click', async () => {
-    const studentName = getActiveChildName();
+    const studentName = currentSelectedChild || getActiveChildName();
     const note = document.getElementById('modalNoteInput').value.trim();
     const btn = document.getElementById('submitAttendanceBtn');
 
     if (!studentName || !selectedDate) {
-      showToast('先にお子さんのお名前を入力・保存してください。', true);
+      showToast('先にお子さんを追加・選択してください。', true);
+      showAddChildForm(true);
       return;
     }
 
@@ -613,10 +595,6 @@ document.addEventListener('DOMContentLoaded', () => {
         note: note,
         source: 'parent'
       });
-      if (!parentKids.some(kid => normalizeName(kid) === normalizeName(studentName))) {
-        parentKids = dedupeKids(parentKids.concat([studentName]));
-      }
-      setActiveChild(studentName);
       document.getElementById('statusModal').classList.add('hidden');
       showToast(`${studentName}さん：${selectedDate} の出欠を【${selectedStatus}】で保存しました！`);
     } catch (err) {
