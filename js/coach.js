@@ -94,14 +94,17 @@ function startLiveSync() {
     const next = {};
     snap.forEach(doc => {
       const item = doc.data() || {};
-      const normalizedName = item.normalizedName || doc.id;
-      if (!item.name || !normalizedName) return;
+      if (!item.name) return;
+      // 旧データは doc.id が生の氏名正規化値の場合もある
+      const normalizedName = item.normalizedName || normalizeName(item.name) || doc.id;
+      if (!normalizedName) return;
       const kana = item.kana || '';
       next[normalizedName] = {
         name: item.name,
         kana: kana,
         normalizedName: normalizedName,
-        normalizedKana: item.normalizedKana || normalizeKana(kana)
+        normalizedKana: item.normalizedKana || normalizeKana(kana),
+        docId: doc.id
       };
     });
     studentsMap = next;
@@ -127,6 +130,8 @@ function populateDatalist() {
     });
 }
 
+let editingStudent = null;
+
 function renderRoster() {
   const list = document.getElementById('rosterList');
   const students = Object.values(studentsMap).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
@@ -142,53 +147,177 @@ function renderRoster() {
   students.forEach(student => {
     const row = document.createElement('div');
     row.className = 'flex items-center justify-between gap-2 py-2.5 border-b border-slate-100';
-    const name = document.createElement('span');
-    name.className = 'text-sm font-bold text-slate-800 break-words min-w-0';
-    name.textContent = student.name;
+
+    const info = document.createElement('div');
+    info.className = 'min-w-0';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'text-sm font-bold text-slate-800 break-words';
+    nameEl.textContent = student.name;
+    const kanaEl = document.createElement('div');
+    kanaEl.className = 'text-xs text-slate-400 font-normal';
     const kana = String(student.kana || '').trim();
-    if (kana) {
-      const kanaSpan = document.createElement('span');
-      kanaSpan.className = 'text-xs text-slate-400 font-normal ml-1';
-      kanaSpan.textContent = `（${kana}）`;
-      name.appendChild(kanaSpan);
-    }
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'shrink-0 text-xs font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg active:scale-95 transition';
-    del.textContent = '削除（退会）';
-    del.addEventListener('click', () => deleteStudent(student));
-    row.append(name, del);
+    kanaEl.textContent = kana ? `（${kana}）` : '※ふりがな未設定';
+    info.append(nameEl, kanaEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center gap-1.5 shrink-0';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'edit-student-btn text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg active:scale-95 transition';
+    editBtn.textContent = '✏️ 編集';
+    editBtn.addEventListener('click', () => openEditStudentModal(student));
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'delete-student-btn text-xs font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg active:scale-95 transition';
+    delBtn.textContent = '削除';
+    delBtn.addEventListener('click', () => deleteStudent(student));
+
+    actions.append(editBtn, delBtn);
+    row.append(info, actions);
     list.appendChild(row);
   });
 }
 
+function findExactStudentByName(trimmedName) {
+  const target = String(trimmedName || '').trim();
+  if (!target) return null;
+  return Object.values(studentsMap).find(student => student.name === target) || null;
+}
+
 async function addStudent(name, kana) {
-  const trimmed = (name || '').trim();
+  const trimmed = String(name || '').trim();
   const trimmedKana = String(kana || '').trim();
-  const normalizedName = normalizeName(trimmed);
-  if (!trimmed || !normalizedName) {
+  if (!trimmed) {
     showToast('生徒名を入力してください。', true);
-    return;
+    return false;
   }
-  if (studentsMap[normalizedName]) {
+  const normalizedName = normalizeName(trimmed);
+  if (!normalizedName) {
+    showToast('生徒名を入力してください（空白のみは登録できません）。', true);
+    return false;
+  }
+  // 重複は表示名の完全一致のみを弾く
+  if (findExactStudentByName(trimmed)) {
     showToast('すでに名簿に登録されています。', true);
     return false;
   }
-  await addStudentMaster(trimmed, trimmedKana);
-  showToast(`${trimmed} さんを名簿に追加しました`);
-  return true;
+  // 空白除去後が同一の既存レコードがある場合は上書き事故を防ぐ
+  if (studentsMap[normalizedName]) {
+    showToast(`「${studentsMap[normalizedName].name}」として既に登録されています。編集で修正してください。`, true);
+    return false;
+  }
+  try {
+    await addStudentMaster(trimmed, trimmedKana);
+    showToast(`${trimmed} さんを名簿に追加しました`);
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast('名簿への追加に失敗しました。記号を含む場合も再試行してください。', true);
+    return false;
+  }
+}
+
+function openEditStudentModal(student) {
+  editingStudent = student;
+  document.getElementById('editStudentNameInput').value = student.name || '';
+  document.getElementById('editStudentKanaInput').value = student.kana || '';
+  const modal = document.getElementById('editStudentModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => document.getElementById('editStudentNameInput').focus(), 0);
+}
+
+function closeEditStudentModal() {
+  editingStudent = null;
+  const modal = document.getElementById('editStudentModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function saveEditedStudent() {
+  if (!editingStudent) return;
+  const trimmed = document.getElementById('editStudentNameInput').value.trim();
+  const trimmedKana = document.getElementById('editStudentKanaInput').value.trim();
+  if (!trimmed) {
+    showToast('生徒名を入力してください。', true);
+    return;
+  }
+  if (!normalizeName(trimmed)) {
+    showToast('生徒名を入力してください（空白のみは登録できません）。', true);
+    return;
+  }
+  const exact = findExactStudentByName(trimmed);
+  if (exact && exact.normalizedName !== editingStudent.normalizedName) {
+    showToast('同じ氏名の生徒がすでに名簿にいます。', true);
+    return;
+  }
+  const btn = document.getElementById('saveEditStudentBtn');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+  try {
+    await updateStudentMaster(editingStudent, trimmed, trimmedKana);
+    showToast(`${trimmed}さんの情報を更新しました`);
+    closeEditStudentModal();
+  } catch (err) {
+    console.error(err);
+    showToast('生徒情報の更新に失敗しました。通信環境を確認してください。', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '変更を保存';
+  }
 }
 
 async function deleteStudent(student) {
   const ok = confirm(`${student.name}さんを名簿から削除（退会）しますか？`);
   if (!ok) return;
   try {
-    await deleteStudentMaster(student.normalizedName);
+    await deleteStudentMaster(student);
     showToast(`${student.name}さんを名簿から削除しました`);
   } catch (err) {
     console.error(err);
     showToast('名簿の削除に失敗しました。通信環境を確認してください。', true);
   }
+}
+
+function collectMissingStudentsFromAttendance() {
+  const missing = [];
+  const seen = new Set(Object.keys(studentsMap));
+  Object.values(attendanceMap).forEach(item => {
+    if (!item) return;
+    const name = String(item.name || '').trim();
+    if (!name || name === '【練習予定】') return;
+    const normalizedName = item.normalizedName || normalizeName(name);
+    if (!normalizedName || seen.has(normalizedName)) return;
+    seen.add(normalizedName);
+    missing.push({ name: name, normalizedName: normalizedName });
+  });
+  return missing;
+}
+
+async function commitStudentImports(entries) {
+  const chunkSize = 400;
+  let imported = 0;
+  for (let i = 0; i < entries.length; i += chunkSize) {
+    const chunk = entries.slice(i, i + chunkSize);
+    const batch = db.batch();
+    chunk.forEach(entry => {
+      const docId = toStudentDocId(entry.normalizedName);
+      if (!docId) return;
+      batch.set(db.collection('students').doc(docId), {
+        name: entry.name,
+        kana: '',
+        normalizedName: entry.normalizedName,
+        normalizedKana: '',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      imported += 1;
+    });
+    if (chunk.length > 0) await batch.commit();
+  }
+  return imported;
 }
 
 async function seedStudentsFromAttendance() {
@@ -197,23 +326,22 @@ async function seedStudentsFromAttendance() {
     localStorage.setItem(ROSTER_SEED_KEY, '1');
     return;
   }
-  const seen = new Set();
-  const batch = db.batch();
-  let count = 0;
-  Object.values(attendanceMap).forEach(item => {
-    const name = (item && item.name ? item.name : '').trim();
-    const normalizedName = (item && item.normalizedName) || normalizeName(name);
-    if (!name || !normalizedName || name === '【練習予定】' || seen.has(normalizedName)) return;
-    seen.add(normalizedName);
-    batch.set(db.collection('students').doc(normalizedName), {
-      name: name,
-      normalizedName: normalizedName,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    count += 1;
-  });
-  if (count > 0) await batch.commit();
+  const missing = collectMissingStudentsFromAttendance();
+  if (missing.length > 0) await commitStudentImports(missing);
   localStorage.setItem(ROSTER_SEED_KEY, '1');
+}
+
+async function importMissingStudentsFromAttendance() {
+  const missing = collectMissingStudentsFromAttendance();
+  if (missing.length === 0) {
+    showToast('取り込む未登録の生徒はいませんでした');
+    return 0;
+  }
+  const ok = confirm(`出欠履歴から未登録の生徒 ${missing.length} 名を名簿に追加しますか？`);
+  if (!ok) return 0;
+  const imported = await commitStudentImports(missing);
+  showToast(`${imported}名の生徒を名簿に取り込みました`);
+  return imported;
 }
 
 function updateScheduleUI() {
@@ -706,6 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (added) {
         input.value = '';
         if (kanaInput) kanaInput.value = '';
+        input.focus();
       }
     } catch (err) {
       console.error(err);
@@ -721,6 +850,36 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.getElementById('rosterNameInput').addEventListener('keydown', submitRosterOnEnter);
   document.getElementById('rosterKanaInput').addEventListener('keydown', submitRosterOnEnter);
+
+  document.getElementById('importStudentsFromAttendanceBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('importStudentsFromAttendanceBtn');
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = '取り込み中...';
+    try {
+      await importMissingStudentsFromAttendance();
+    } catch (err) {
+      console.error(err);
+      showToast('出欠履歴からの取り込みに失敗しました。通信環境を確認してください。', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+    }
+  });
+
+  document.getElementById('closeEditStudentBtn').addEventListener('click', closeEditStudentModal);
+  document.getElementById('editStudentModal').addEventListener('click', (event) => {
+    if (event.target.id === 'editStudentModal') closeEditStudentModal();
+  });
+  document.getElementById('saveEditStudentBtn').addEventListener('click', () => {
+    saveEditedStudent();
+  });
+  document.getElementById('editStudentKanaInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') saveEditedStudent();
+  });
+  document.getElementById('editStudentNameInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') document.getElementById('editStudentKanaInput').focus();
+  });
 
   // 代理モーダル
   const manualModal = document.getElementById('manualModal');

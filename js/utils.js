@@ -24,6 +24,19 @@ function normalizeKana(str) {
     .trim();
 }
 
+/**
+ * Firestore students ドキュメントID用（「/」等でエラーにならないよう安全化）
+ */
+function toStudentDocId(normalizedName) {
+  let id = String(normalizedName || '');
+  if (!id) return '';
+  // Firestore はパス区切り「/」をドキュメントIDに含められない
+  id = id.replace(/\//g, '／');
+  if (id === '.' || id === '..') id = `_${id}_`;
+  if (/^__.*__$/.test(id)) id = `x${id}`;
+  return id;
+}
+
 function normalizeDateKey(val) {
   if (!val) return '';
   const s = String(val).trim().replace(/\//g, '-');

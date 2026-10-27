@@ -76,6 +76,8 @@ async function addStudentMaster(name, kana) {
   const trimmedKana = String(kana || '').trim();
   const normalizedName = normalizeName(trimmed);
   if (!trimmed || !normalizedName) throw new Error('name is required');
+  const docId = toStudentDocId(normalizedName);
+  if (!docId) throw new Error('name is required');
   const payload = {
     name: trimmed,
     kana: trimmedKana,
@@ -84,17 +86,63 @@ async function addStudentMaster(name, kana) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  await db.collection('students').doc(normalizedName).set(payload);
+  await db.collection('students').doc(docId).set(payload, { merge: true });
   return {
     name: trimmed,
     kana: trimmedKana,
     normalizedName: normalizedName,
-    normalizedKana: payload.normalizedKana
+    normalizedKana: payload.normalizedKana,
+    docId: docId
   };
 }
 
-async function deleteStudentMaster(normalizedName) {
-  const key = normalizeName(normalizedName);
-  if (!key) throw new Error('normalizedName is required');
-  await db.collection('students').doc(key).delete();
+async function updateStudentMaster(student, name, kana) {
+  const trimmed = String(name || '').trim();
+  const trimmedKana = String(kana || '').trim();
+  const newNormalizedName = normalizeName(trimmed);
+  if (!trimmed || !newNormalizedName) throw new Error('name is required');
+  if (!student) throw new Error('student is required');
+
+  const oldNormalizedName = student.normalizedName || normalizeName(student.name);
+  const oldDocId = student.docId || toStudentDocId(oldNormalizedName);
+  const newDocId = toStudentDocId(newNormalizedName);
+  if (!oldDocId || !newDocId) throw new Error('invalid student id');
+
+  const payload = {
+    name: trimmed,
+    kana: trimmedKana,
+    normalizedName: newNormalizedName,
+    normalizedKana: normalizeKana(trimmedKana),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  if (oldDocId === newDocId) {
+    await db.collection('students').doc(oldDocId).set(payload, { merge: true });
+  } else {
+    await db.collection('students').doc(newDocId).set({
+      ...payload,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    await db.collection('students').doc(oldDocId).delete();
+  }
+
+  return {
+    name: trimmed,
+    kana: trimmedKana,
+    normalizedName: newNormalizedName,
+    normalizedKana: payload.normalizedKana,
+    docId: newDocId
+  };
+}
+
+async function deleteStudentMaster(studentOrNormalizedName) {
+  let docId = '';
+  if (studentOrNormalizedName && typeof studentOrNormalizedName === 'object') {
+    const norm = studentOrNormalizedName.normalizedName || normalizeName(studentOrNormalizedName.name);
+    docId = studentOrNormalizedName.docId || toStudentDocId(norm);
+  } else {
+    docId = toStudentDocId(normalizeName(studentOrNormalizedName));
+  }
+  if (!docId) throw new Error('normalizedName is required');
+  await db.collection('students').doc(docId).delete();
 }
