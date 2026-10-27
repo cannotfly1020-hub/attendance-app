@@ -68,3 +68,17 @@ function showToast(msg, isError) {
   container.appendChild(toast);
   setTimeout(() => toast.remove(), isError ? 8000 : 3500);
 }
+
+/** PWA サービスワーカー登録（Network-First / 即時更新） */
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  const register = () => {
+    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch((err) => {
+      console.warn('Service Worker registration failed:', err);
+    });
+  };
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register);
+}
+
+registerServiceWorker();
