@@ -10,22 +10,195 @@ function updateClubNameDisplay(name) {
 
 updateClubNameDisplay(CLUB_NAME);
 
-const STORAGE_KEY_NAME = 'sports_app_parent_kid';
+const STORAGE_KEY_NAME_LEGACY = 'sports_app_parent_kid';
+const STORAGE_KEY_KIDS = 'sports_app_parent_kids';
+const STORAGE_KEY_ACTIVE = 'sports_app_parent_active_kid';
+const CHILD_ICONS = ['👦', '🧒', '👧', '🧑'];
 
 let attendanceMap = {};
 let attendanceRaw = {};
 let schedulesMap = {};
 let selectedDate = null;
 let selectedStatus = '出席';
+let parentKids = [];
+let activeChildName = '';
+
+function dedupeKids(names) {
+  const seen = new Set();
+  const result = [];
+  (names || []).forEach(raw => {
+    const name = String(raw || '').trim();
+    if (!name) return;
+    const key = normalizeName(name);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(name);
+  });
+  return result;
+}
+
+function parseKidsInput(raw) {
+  return dedupeKids(String(raw || '').split(/[,、]/));
+}
+
+function getActiveChildName() {
+  const fromActive = String(activeChildName || '').trim();
+  if (fromActive) return fromActive;
+  return document.getElementById('studentNameInput').value.trim();
+}
+
+function persistParentKids() {
+  localStorage.setItem(STORAGE_KEY_KIDS, JSON.stringify(parentKids));
+  if (activeChildName) {
+    localStorage.setItem(STORAGE_KEY_ACTIVE, activeChildName);
+    localStorage.setItem(STORAGE_KEY_NAME_LEGACY, activeChildName);
+  } else {
+    localStorage.removeItem(STORAGE_KEY_ACTIVE);
+  }
+}
+
+function loadParentKids() {
+  let kids = [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_KIDS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) kids = parsed;
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  if (kids.length === 0) {
+    const legacy = localStorage.getItem(STORAGE_KEY_NAME_LEGACY);
+    if (legacy && String(legacy).trim()) kids = [String(legacy).trim()];
+  }
+  parentKids = dedupeKids(kids);
+
+  const savedActive = localStorage.getItem(STORAGE_KEY_ACTIVE) || localStorage.getItem(STORAGE_KEY_NAME_LEGACY) || '';
+  const matched = parentKids.find(name => normalizeName(name) === normalizeName(savedActive));
+  activeChildName = matched || parentKids[0] || '';
+  persistParentKids();
+}
+
+function setActiveChild(name, options) {
+  const opts = options || {};
+  const next = String(name || '').trim();
+  activeChildName = next;
+  const input = document.getElementById('studentNameInput');
+  if (input && !opts.keepInput) input.value = next;
+  persistParentKids();
+  renderParentKidsTabs();
+  refreshParentViews();
+}
+
+function addOrSaveKidsFromInput() {
+  const input = document.getElementById('studentNameInput');
+  const parts = parseKidsInput(input.value);
+  if (parts.length === 0) {
+    showToast('お子さんのお名前を入力してください。', true);
+    input.focus();
+    return false;
+  }
+
+  parts.forEach(name => {
+    const exists = parentKids.some(kid => normalizeName(kid) === normalizeName(name));
+    if (!exists) parentKids.push(name);
+  });
+  parentKids = dedupeKids(parentKids);
+  const last = parts[parts.length - 1];
+  const resolved = parentKids.find(kid => normalizeName(kid) === normalizeName(last)) || last;
+  setActiveChild(resolved);
+  showToast(
+    parts.length > 1
+      ? `${parts.length}名のお子さんを保存しました`
+      : `お子さんのお名前「${resolved}」を保存しました`
+  );
+  return true;
+}
+
+function removeParentKid(name) {
+  const key = normalizeName(name);
+  if (!key) return;
+  const ok = confirm(`${name}さんのタブを外しますか？（出欠データ自体は消えません）`);
+  if (!ok) return;
+  parentKids = parentKids.filter(kid => normalizeName(kid) !== key);
+  if (normalizeName(activeChildName) === key) {
+    activeChildName = parentKids[0] || '';
+  }
+  persistParentKids();
+  const input = document.getElementById('studentNameInput');
+  if (input) input.value = activeChildName;
+  renderParentKidsTabs();
+  refreshParentViews();
+  showToast(`${name}さんの表示を外しました`);
+}
+
+function startAddAnotherChild() {
+  const input = document.getElementById('studentNameInput');
+  input.value = '';
+  input.focus();
+  showToast('追加するお子さんのお名前を入力して「保存」を押してください');
+}
+
+function renderParentKidsTabs() {
+  const tabs = document.getElementById('parentKidsTabs');
+  if (!tabs) return;
+  tabs.innerHTML = '';
+
+  if (parentKids.length <= 1) {
+    tabs.className = 'hidden';
+    return;
+  }
+
+  tabs.className = 'flex flex-wrap gap-2';
+  parentKids.forEach((name, index) => {
+    const selected = normalizeName(name) === normalizeName(activeChildName);
+    const wrap = document.createElement('div');
+    wrap.className = selected
+      ? 'inline-flex items-center gap-1 rounded-xl bg-indigo-600 text-white font-bold shadow-sm'
+      : 'inline-flex items-center gap-1 rounded-xl bg-slate-100 text-slate-700 border border-slate-300 font-bold';
+
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.className = selected
+      ? 'px-3 py-2 text-xs sm:text-sm rounded-xl hover:bg-indigo-500 transition'
+      : 'px-3 py-2 text-xs sm:text-sm rounded-xl hover:bg-slate-200 transition';
+    selectBtn.textContent = `${CHILD_ICONS[index % CHILD_ICONS.length]} ${name}${selected ? '（選択中）' : ''}`;
+    selectBtn.addEventListener('click', () => setActiveChild(name));
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = selected
+      ? 'pr-2.5 pl-1 py-2 text-xs text-indigo-100 hover:text-white'
+      : 'pr-2.5 pl-1 py-2 text-xs text-slate-400 hover:text-rose-600';
+    removeBtn.setAttribute('aria-label', `${name}を削除`);
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      removeParentKid(name);
+    });
+
+    wrap.append(selectBtn, removeBtn);
+    tabs.appendChild(wrap);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'px-3 py-2 text-xs sm:text-sm rounded-xl bg-white text-indigo-700 border border-indigo-200 font-bold hover:bg-indigo-50 transition';
+  addBtn.textContent = '＋ お子さんを追加';
+  addBtn.addEventListener('click', startAddAnotherChild);
+  tabs.appendChild(addBtn);
+}
 
 function syncAttendanceMapForCurrentChild() {
-  const normKey = normalizeName(document.getElementById('studentNameInput').value.trim());
+  const normKey = normalizeName(getActiveChildName());
   const next = {};
   if (normKey) {
     Object.keys(attendanceRaw).forEach(id => {
       const item = attendanceRaw[id];
       if (!item) return;
       const itemNorm = item.normalizedName || normalizeName(item.name);
+      // 完全一致のみ（「太郎・次郎」連名レコードに引っ張られない）
       if (itemNorm === normKey) next[id] = item;
     });
   }
@@ -176,7 +349,7 @@ function renderUpcomingNotice() {
 
 function renderList() {
   const container = document.getElementById('scheduleList');
-  const studentName = document.getElementById('studentNameInput').value.trim();
+  const studentName = getActiveChildName();
   const normKey = normalizeName(studentName);
 
   const days = [];
@@ -266,7 +439,7 @@ function renderList() {
 }
 
 function openModal(dateStr, currentRecord, schedule) {
-  const studentName = document.getElementById('studentNameInput').value.trim();
+  const studentName = getActiveChildName();
   if (!studentName) {
     showToast('先にお子さんのお名前を入力・保存してください。', true);
     document.getElementById('studentNameInput').focus();
@@ -274,7 +447,7 @@ function openModal(dateStr, currentRecord, schedule) {
   }
 
   selectedDate = dateStr;
-  document.getElementById('modalDateTitle').textContent = `${dateStr} の出欠登録`;
+  document.getElementById('modalDateTitle').textContent = `${studentName}さんの出欠登録（${dateStr}）`;
 
   const notice = document.getElementById('modalScheduleNotice');
   notice.replaceChildren();
@@ -357,8 +530,10 @@ function updateModalBtnUI() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem(STORAGE_KEY_NAME);
-  if (saved) document.getElementById('studentNameInput').value = saved;
+  loadParentKids();
+  const nameInput = document.getElementById('studentNameInput');
+  if (activeChildName) nameInput.value = activeChildName;
+  renderParentKidsTabs();
 
   const guideModal = document.getElementById('parentGuideModal');
   const openParentGuide = () => {
@@ -377,15 +552,32 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('saveNameBtn').addEventListener('click', () => {
-    const name = document.getElementById('studentNameInput').value.trim();
-    if (name) {
-      localStorage.setItem(STORAGE_KEY_NAME, name);
-      showToast(`お子さんのお名前「${name}」を保存しました`);
-      refreshParentViews();
+    addOrSaveKidsFromInput();
+  });
+
+  nameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addOrSaveKidsFromInput();
     }
   });
 
-  document.getElementById('studentNameInput').addEventListener('change', () => {
+  nameInput.addEventListener('change', () => {
+    const typed = nameInput.value.trim();
+    if (!typed) {
+      refreshParentViews();
+      return;
+    }
+    // 入力中の名前が登録済みなら選択を合わせる（未保存の一時プレビューも可）
+    const matched = parentKids.find(kid => normalizeName(kid) === normalizeName(typed));
+    if (matched) {
+      activeChildName = matched;
+      persistParentKids();
+      renderParentKidsTabs();
+    } else if (parentKids.length <= 1) {
+      // 1人だけの従来運用: 入力値をそのまま表示対象にする
+      activeChildName = typed;
+    }
     refreshParentViews();
   });
 
@@ -401,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('submitAttendanceBtn').addEventListener('click', async () => {
-    const studentName = document.getElementById('studentNameInput').value.trim();
+    const studentName = getActiveChildName();
     const note = document.getElementById('modalNoteInput').value.trim();
     const btn = document.getElementById('submitAttendanceBtn');
 
@@ -421,9 +613,12 @@ document.addEventListener('DOMContentLoaded', () => {
         note: note,
         source: 'parent'
       });
-      localStorage.setItem(STORAGE_KEY_NAME, studentName);
+      if (!parentKids.some(kid => normalizeName(kid) === normalizeName(studentName))) {
+        parentKids = dedupeKids(parentKids.concat([studentName]));
+      }
+      setActiveChild(studentName);
       document.getElementById('statusModal').classList.add('hidden');
-      showToast(`${selectedDate} の出欠を【${selectedStatus}】で保存しました！`);
+      showToast(`${studentName}さん：${selectedDate} の出欠を【${selectedStatus}】で保存しました！`);
     } catch (err) {
       console.error(err);
       showToast('出欠の更新に失敗しました。通信環境を確認してください。', true);

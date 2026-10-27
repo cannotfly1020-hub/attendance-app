@@ -87,14 +87,15 @@
         </label>
         <span class="text-xs text-amber-600 font-semibold shrink-0">端末に自動保存</span>
       </div>
+      <div id="parentKidsTabs" class="hidden flex flex-wrap gap-2" aria-label="お子さんの切り替え"></div>
       <div class="flex flex-col sm:flex-row gap-2">
-        <input type="text" id="studentNameInput" placeholder="例: お子さんのフルネーム"
+        <input type="text" id="studentNameInput" placeholder="例: 津守 太郎（兄弟はカンマ区切り可）"
           class="w-full min-w-0 sm:flex-1 border border-slate-300 rounded-xl px-3 py-2.5 text-base font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="name">
-        <button id="saveNameBtn" class="min-h-[48px] bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-xl active:scale-95 transition shadow-sm shrink-0">
+        <button type="button" id="saveNameBtn" class="min-h-[48px] bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-xl active:scale-95 transition shadow-sm shrink-0">
           保存
         </button>
       </div>
-      <p class="text-[11px] text-slate-500 font-medium leading-relaxed">※入力したお子さん専用のページとして端末に保存されます</p>
+      <p class="text-[11px] text-slate-500 font-medium leading-relaxed">※兄弟・姉妹がいる場合は「＋ お子さんを追加」か、カンマ区切り（例: 太郎, 次郎）で登録できます</p>
     </section>
 
     <!-- 直近の練習予定・休講案内 -->
@@ -124,7 +125,7 @@
       <div class="overflow-y-auto p-4 sm:p-5 space-y-4 text-xs sm:text-sm text-slate-700">
         <section class="rounded-xl border border-indigo-100 bg-indigo-50/70 p-3.5 space-y-1.5">
           <h3 class="font-black text-indigo-900 text-sm">STEP 1: 最初にお子さんのお名前を保存</h3>
-          <p class="leading-relaxed font-medium">💡 お名前を入力して保存すると、この端末にお子さん専用ページとして記憶されます（他のお子さんの名前は表示されませんのでご安心ください）。</p>
+          <p class="leading-relaxed font-medium">💡 お名前を入力して保存すると、この端末にお子さん専用ページとして記憶されます。兄弟・姉妹がいる場合は複数名を登録でき、上部のタブでお子さんごとに出欠を切り替えられます。</p>
         </section>
         <section class="rounded-xl border border-sky-100 bg-sky-50/70 p-3.5 space-y-1.5">
           <h3 class="font-black text-sky-900 text-sm">STEP 2: 予定の確認と出欠登録</h3>
