@@ -57,96 +57,99 @@
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen overflow-x-hidden overflow-y-auto w-full">
+<body class="bg-slate-50 text-slate-800 min-h-screen overflow-x-hidden overflow-y-auto w-full">
 
   <div id="toastContainer" class="fixed top-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none"></div>
 
-  <main class="w-full max-w-md mx-auto px-4 py-6">
-    <div class="w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-5 sm:p-8 space-y-6">
-    <div class="text-center space-y-2">
-      <span class="text-4xl">🏃‍♂️</span>
-      <h1 id="portalTitle" class="text-xl sm:text-2xl font-black text-slate-900 break-words">運動教室 出欠管理ポータル</h1>
-      <p class="text-xs text-slate-500 font-bold">ご利用の画面を選択してください</p>
+  <main class="w-full max-w-md mx-auto px-4 py-8 space-y-4">
+    <div class="text-center">
+      <div class="w-14 h-14 rounded-2xl bg-white shadow-sm border border-slate-200/80 flex items-center justify-center text-3xl mx-auto mb-3">
+        🏃‍♂️
+      </div>
+      <h1 id="portalTitle" class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">運動教室 出欠管理ポータル</h1>
+      <p class="text-xs text-slate-500 font-medium mt-1.5">ご利用の画面を選択してください</p>
     </div>
 
-    <div class="space-y-3">
-      <!-- 生徒用 -->
-      <div class="w-full rounded-2xl bg-amber-500 text-white shadow-md overflow-hidden">
-        <a href="student.html" class="block w-full p-4 sm:p-5 hover:bg-amber-600 active:scale-[0.99] transition">
-          <div class="flex items-center gap-3">
-            <span class="text-3xl shrink-0">🏃‍♂️</span>
-            <div class="text-left min-w-0 flex-1">
-              <div class="text-xs font-bold text-amber-100">子ども用</div>
-              <div class="text-base sm:text-lg font-black leading-snug break-words">れんしゅう出欠チェック</div>
-            </div>
-          </div>
-        </a>
-        <div class="border-t border-slate-100 px-3 py-3">
-          <div class="flex flex-wrap gap-2">
-            <button type="button" data-action="line" data-file="student.html" data-message="【運動教室】生徒用出欠送信ページです。こちらから出欠を入力してください！" class="share-btn flex-1 basis-[8rem] min-h-[48px] min-w-0 inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
-              <span>💬</span><span>LINEで送る</span>
-            </button>
-            <button type="button" data-action="copy" data-file="student.html" class="share-btn flex-1 basis-[8rem] min-h-[48px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
-              <span>🔗</span><span>URLコピー</span>
-            </button>
-            <button type="button" data-action="qr" data-file="student.html" data-title="生徒用 出欠ページ" class="share-btn flex-1 basis-[8rem] min-h-[48px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
-              <span>📱</span><span>QR</span>
-            </button>
-          </div>
+    <!-- 生徒用 -->
+    <section class="w-full bg-white rounded-2xl shadow-sm border border-amber-200/70 overflow-hidden">
+      <a href="student.html" class="flex items-center gap-3 p-4 sm:p-5 active:bg-amber-50/50 transition">
+        <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0 border border-amber-200/80">
+          🏃‍♂️
         </div>
-      </div>
-
-      <!-- 保護者用 -->
-      <div class="w-full rounded-2xl bg-indigo-600 text-white shadow-md overflow-hidden">
-        <a href="parent.html" class="block w-full p-4 sm:p-5 hover:bg-indigo-700 active:scale-[0.99] transition">
-          <div class="flex items-center gap-3">
-            <span class="text-3xl shrink-0">👨‍👩‍👧</span>
-            <div class="text-left min-w-0 flex-1">
-              <div class="text-xs font-bold text-indigo-200">お父さん・お母さん用</div>
-              <div class="text-base sm:text-lg font-black leading-snug break-words">保護者ポータル（2週間カレンダー）</div>
-            </div>
-          </div>
-        </a>
-        <div class="border-t border-slate-100 px-3 py-3">
-          <div class="flex flex-wrap gap-2">
-            <button type="button" data-action="line" data-file="parent.html" data-message="【運動教室】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。" class="share-btn flex-1 basis-[8rem] min-h-[48px] min-w-0 inline-flex items-center justify-center gap-1 bg-[#06C755] hover:bg-[#05b34c] text-white text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
-              <span>💬</span><span>LINEで送る</span>
-            </button>
-            <button type="button" data-action="copy" data-file="parent.html" class="share-btn flex-1 basis-[8rem] min-h-[48px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
-              <span>🔗</span><span>URLコピー</span>
-            </button>
-            <button type="button" data-action="qr" data-file="parent.html" data-title="保護者用ポータル" class="share-btn flex-1 basis-[8rem] min-h-[48px] min-w-0 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] sm:text-xs font-bold px-2 py-2 rounded-xl active:scale-95 transition">
-              <span>📱</span><span>QR</span>
-            </button>
-          </div>
+        <div class="text-left min-w-0 flex-1 pr-1">
+          <div class="text-[11px] font-bold text-amber-700">子ども用・1タップで出席送信</div>
+          <div class="text-base sm:text-lg font-black text-slate-900 leading-snug">れんしゅう出欠チェック</div>
         </div>
-      </div>
-
-      <!-- 指導者用ボタン -->
-      <a href="coach.html" class="block w-full p-4 sm:p-5 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white shadow-md transition">
-        <div class="flex items-center gap-3">
-          <span class="text-3xl shrink-0">📋</span>
-          <div class="text-left min-w-0 flex-1">
-            <div id="coachRoleLabel" class="text-xs font-bold text-slate-400">コーチ専用</div>
-            <div class="text-base sm:text-lg font-black leading-snug break-words">出欠＆練習予定ダッシュボード</div>
-          </div>
-        </div>
+        <span class="text-slate-300 text-lg font-black shrink-0" aria-hidden="true">›</span>
       </a>
-    </div>
+      <div class="border-t border-slate-100 bg-slate-50/60 p-2.5">
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" data-action="line" data-file="student.html" data-message="【運動教室】生徒用出欠送信ページです。こちらから出欠を入力してください！" class="share-btn text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 font-bold text-[11px] sm:text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition whitespace-nowrap">
+            <span>💬</span><span>LINE</span>
+          </button>
+          <button type="button" data-action="copy" data-file="student.html" class="share-btn text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 font-bold text-[11px] sm:text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition shadow-sm whitespace-nowrap">
+            <span>🔗</span><span>コピー</span>
+          </button>
+          <button type="button" data-action="qr" data-file="student.html" data-title="生徒用 出欠ページ" class="share-btn text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 font-bold text-[11px] sm:text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition shadow-sm whitespace-nowrap">
+            <span>📱</span><span>QR</span>
+          </button>
+        </div>
+      </div>
+    </section>
 
-    <div class="text-center text-[11px] text-slate-400 font-medium">
+    <!-- 保護者用 -->
+    <section class="w-full bg-white rounded-2xl shadow-sm border border-indigo-200/70 overflow-hidden">
+      <a href="parent.html" class="flex items-center gap-3 p-4 sm:p-5 active:bg-indigo-50/50 transition">
+        <div class="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl shrink-0 border border-indigo-200/80">
+          👨‍👩‍👧
+        </div>
+        <div class="text-left min-w-0 flex-1 pr-1">
+          <div class="text-[11px] font-bold text-indigo-600 leading-snug">2週間の練習カレンダー・出欠変更</div>
+          <div class="text-base sm:text-lg font-black text-slate-900 leading-snug">保護者ポータル</div>
+        </div>
+        <span class="text-slate-300 text-lg font-black shrink-0" aria-hidden="true">›</span>
+      </a>
+      <div class="border-t border-slate-100 bg-slate-50/60 p-2.5">
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" data-action="line" data-file="parent.html" data-message="【運動教室】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。" class="share-btn text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 font-bold text-[11px] sm:text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition whitespace-nowrap">
+            <span>💬</span><span>LINE</span>
+          </button>
+          <button type="button" data-action="copy" data-file="parent.html" class="share-btn text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 font-bold text-[11px] sm:text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition shadow-sm whitespace-nowrap">
+            <span>🔗</span><span>コピー</span>
+          </button>
+          <button type="button" data-action="qr" data-file="parent.html" data-title="保護者用ポータル" class="share-btn text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 font-bold text-[11px] sm:text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition shadow-sm whitespace-nowrap">
+            <span>📱</span><span>QR</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 指導者用 -->
+    <a href="coach.html" class="w-full bg-slate-900 text-white rounded-2xl shadow-sm p-4 active:scale-[0.99] transition flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl shrink-0">
+          📋
+        </div>
+        <div class="text-left min-w-0 pr-1">
+          <div id="coachRoleLabel" class="text-[11px] font-bold text-slate-400">指導者専用</div>
+          <div class="text-[15px] sm:text-base font-black leading-snug">出欠＆練習予定ダッシュボード</div>
+        </div>
+      </div>
+      <span class="text-slate-500 text-lg font-black shrink-0" aria-hidden="true">›</span>
+    </a>
+
+    <p class="text-xs text-slate-400 text-center font-medium pt-2">
       ※ 各自の専用ページをブックマークまたはホーム画面に追加しておくと便利です
-    </div>
-    </div>
+    </p>
   </main>
 
   <div id="qrModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
-    <div class="bg-white w-full max-w-md shrink-0 rounded-2xl p-5 space-y-4 shadow-xl">
+    <div class="bg-white w-full max-w-md shrink-0 rounded-2xl p-5 space-y-4 shadow-2xl border border-slate-100">
       <div class="flex items-center justify-between gap-3">
         <h2 id="qrModalTitle" class="font-black text-slate-900 text-sm sm:text-base">QRコード</h2>
-        <button type="button" id="qrCloseBtn" class="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none px-1" aria-label="閉じる">&times;</button>
+        <button type="button" id="qrCloseBtn" class="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none px-1 min-h-[40px] min-w-[40px]" aria-label="閉じる">&times;</button>
       </div>
-      <img id="qrImage" alt="共有用QRコード" width="250" height="250" class="mx-auto w-full max-w-full h-auto rounded-lg bg-white">
+      <img id="qrImage" alt="共有用QRコード" width="250" height="250" class="mx-auto w-full max-w-[250px] h-auto rounded-xl bg-white border border-slate-100">
       <p id="qrUrlText" class="text-xs text-slate-600 font-medium text-center break-all leading-relaxed"></p>
     </div>
   </div>
@@ -170,7 +173,7 @@
     }
 
     document.getElementById('coachRoleLabel').textContent = `${COACH_TITLE}専用`;
-    updateClubNameDisplay(CLUB_NAME);
+    updateClubNameDisplay(CLUB_NAME); // 未取得時は「運動教室」
     subscribeClubName(updateClubNameDisplay);
 
     function getFullTargetUrl(fileName) {
