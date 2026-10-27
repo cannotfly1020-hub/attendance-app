@@ -78,19 +78,13 @@
         <span class="text-xs text-amber-600 font-semibold shrink-0">端末に自動保存</span>
       </div>
       <div class="flex flex-col sm:flex-row gap-2">
-        <input type="text" id="studentNameInput" list="registeredStudentNames" placeholder="例: 津守 堅心" 
-          class="w-full min-w-0 sm:flex-1 border border-slate-300 rounded-xl px-3 py-2.5 text-base font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
-        <datalist id="registeredStudentNames"></datalist>
+        <input type="text" id="studentNameInput" placeholder="例: お子さんのフルネーム"
+          class="w-full min-w-0 sm:flex-1 border border-slate-300 rounded-xl px-3 py-2.5 text-base font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="name">
         <button id="saveNameBtn" class="min-h-[48px] bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-xl active:scale-95 transition shadow-sm shrink-0">
           保存
         </button>
       </div>
-
-      <!-- 過去の登録生徒名クイック選択チップ -->
-      <div id="nameChipsArea" class="hidden pt-2 border-t border-slate-100">
-        <span class="text-[10px] text-slate-400 block mb-1">登録されている生徒名（タップで即設定）:</span>
-        <div id="nameChipsList" class="flex flex-wrap gap-1.5"></div>
-      </div>
+      <p class="text-[11px] text-slate-500 font-medium leading-relaxed">※入力したお子さん専用のページとして端末に保存されます</p>
     </section>
 
     <!-- 直近の練習予定・休講案内 -->
@@ -101,7 +95,7 @@
       <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 bg-slate-50">
         <div>
           <h2 class="text-sm font-bold text-slate-800">直近2週間の練習日・出欠予定</h2>
-          <p class="text-[11px] text-slate-400 mt-0.5">日付をタップすると出欠の変更・理由メモを登録できます</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">日付をタップすると出欠の変更・連絡事項を登録できます</p>
         </div>
       </div>
       <div id="scheduleList" class="divide-y divide-slate-100">
@@ -134,8 +128,8 @@
       </div>
 
       <div>
-        <label class="block text-xs font-semibold text-slate-500 mb-1">遅刻・早退・欠席理由（任意）</label>
-        <input type="text" id="modalNoteInput" placeholder="例: 15分遅れて参加 / 体調不良のため" 
+        <label class="block text-xs font-semibold text-slate-500 mb-1">連絡事項・伝言（任意）</label>
+        <input type="text" id="modalNoteInput" placeholder="例: 15分遅れて参加します / 見学希望 / 迎えに行きます 等"
           class="w-full min-w-0 border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
 
@@ -174,8 +168,8 @@
     const STORAGE_KEY_NAME = 'sports_app_parent_kid';
 
     let attendanceMap = {};
+    let attendanceRaw = {};
     let schedulesMap = {};
-    let studentsMap = {};
     let selectedDate = null;
     let selectedStatus = '出席';
 
@@ -189,8 +183,22 @@
       return s;
     }
 
+    function syncAttendanceMapForCurrentChild() {
+      const normKey = normalizeName(document.getElementById('studentNameInput').value.trim());
+      const next = {};
+      if (normKey) {
+        Object.keys(attendanceRaw).forEach(id => {
+          const item = attendanceRaw[id];
+          if (!item) return;
+          const itemNorm = item.normalizedName || normalizeName(item.name);
+          if (itemNorm === normKey) next[id] = item;
+        });
+      }
+      attendanceMap = next;
+    }
+
     function refreshParentViews() {
-      renderNameChips();
+      syncAttendanceMapForCurrentChild();
       renderUpcomingNotice();
       renderList();
     }
@@ -234,24 +242,11 @@
           const date = normalizeDateKey(item.date);
           next[doc.id] = date ? { ...item, date: date } : item;
         });
-        attendanceMap = next;
+        attendanceRaw = next;
         refreshParentViews();
       }, (err) => {
         console.error(err);
         showToast('出欠を読み込めませんでした。通信環境を確認してください。', true);
-      });
-
-      db.collection('students').onSnapshot((snap) => {
-        const next = {};
-        snap.forEach(doc => {
-          const item = doc.data() || {};
-          if (!item.name) return;
-          next[item.normalizedName || doc.id] = item.name;
-        });
-        studentsMap = next;
-        renderNameChips();
-      }, (err) => {
-        console.error(err);
       });
     }
 
@@ -395,42 +390,6 @@
       });
     }
 
-    function renderNameChips() {
-      const chipsArea = document.getElementById('nameChipsArea');
-      const chipsList = document.getElementById('nameChipsList');
-      const datalist = document.getElementById('registeredStudentNames');
-      const uniqueNames = new Set(Object.values(studentsMap));
-
-      if (uniqueNames.size === 0) {
-        chipsArea.classList.add('hidden');
-        chipsList.innerHTML = '';
-        datalist.innerHTML = '';
-        return;
-      }
-
-      chipsArea.classList.remove('hidden');
-      chipsList.innerHTML = '';
-      datalist.innerHTML = '';
-
-      uniqueNames.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        datalist.appendChild(opt);
-
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-300 font-bold active:scale-95 transition';
-        chip.textContent = name;
-        chip.onclick = () => {
-          document.getElementById('studentNameInput').value = name;
-          localStorage.setItem(STORAGE_KEY_NAME, name);
-          renderUpcomingNotice();
-          renderList();
-        };
-        chipsList.appendChild(chip);
-      });
-    }
-
     function renderList() {
       const container = document.getElementById('scheduleList');
       const studentName = document.getElementById('studentNameInput').value.trim();
@@ -511,7 +470,7 @@
               ${sourceBadge}
             </div>
             ${descLine}
-            ${record && record.note ? `<div class="text-xs text-slate-500 font-medium mt-0.5 break-words">💬 ${escapeHtml(record.note)}</div>` : ''}
+            ${record && record.note ? `<div class="text-xs text-slate-500 font-medium mt-0.5 break-words">💬 連絡事項: ${escapeHtml(record.note)}</div>` : ''}
           </div>
           <div class="shrink-0 max-w-full">${statusBadge}</div>
         `;
@@ -610,8 +569,12 @@
         if (name) {
           localStorage.setItem(STORAGE_KEY_NAME, name);
           showToast(`お子さんのお名前「${name}」を保存しました`);
-          renderList();
+          refreshParentViews();
         }
+      });
+
+      document.getElementById('studentNameInput').addEventListener('change', () => {
+        refreshParentViews();
       });
 
       document.getElementById('closeModalBtn').addEventListener('click', () => {

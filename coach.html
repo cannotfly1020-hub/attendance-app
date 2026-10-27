@@ -175,6 +175,14 @@
       </div>
     </section>
 
+    <!-- 向こう1週間の予定・出欠サマリー -->
+    <section class="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+      <h2 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+        <span>📅</span> 向こう1週間の予定・出欠
+      </h2>
+      <div id="weekSummaryStrip" class="flex gap-2 overflow-x-auto pb-1 w-full min-w-0 snap-x snap-mandatory" role="list"></div>
+    </section>
+
     <!-- 出席者・欠席者リスト -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -275,7 +283,7 @@
       </div>
 
       <div>
-        <label class="block text-xs font-semibold text-slate-500 mb-1">メモ / 理由</label>
+        <label class="block text-xs font-semibold text-slate-500 mb-1">連絡事項</label>
         <input type="text" id="manualNoteInput" placeholder="例: 練習中に体調不良 / 口頭連絡あり" 
           class="w-full min-w-0 border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-900">
       </div>
@@ -599,7 +607,7 @@
         showToast('出力できる出欠データがありません。', true);
         return;
       }
-      const lines = ['日付,生徒名,出欠,理由/メモ,登録元,登録日時'];
+      const lines = ['日付,生徒名,出欠,連絡事項,登録元,登録日時'];
       rows.forEach(item => {
         lines.push([
           item.date || '',
@@ -641,6 +649,113 @@
     }
 
     let lastRenderedDate = '';
+    const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+
+    function countAttendanceForDate(dateStr) {
+      let attend = 0;
+      let absent = 0;
+      Object.values(attendanceMap).forEach(item => {
+        if (!item || item.date !== dateStr) return;
+        if (item.status === '出席') attend += 1;
+        else if (item.status === '欠席') absent += 1;
+      });
+      return { attend, absent };
+    }
+
+    function selectDashboardDate(dateStr) {
+      const next = normalizeDateKey(dateStr);
+      if (!next) return;
+      const picker = document.getElementById('targetDatePicker');
+      if (picker.value !== next) {
+        picker.value = next;
+      }
+      renderDashboard();
+    }
+
+    function renderWeekSummary() {
+      const strip = document.getElementById('weekSummaryStrip');
+      if (!strip) return;
+
+      const selectedDate = normalizeDateKey(document.getElementById('targetDatePicker').value);
+      const todayStr = formatDate(new Date());
+      strip.replaceChildren();
+
+      for (let offset = 0; offset < 7; offset++) {
+        const day = new Date();
+        day.setHours(12, 0, 0, 0);
+        day.setDate(day.getDate() + offset);
+        const dateStr = formatDate(day);
+        const weekday = day.getDay();
+        const schedule = schedulesMap[dateStr];
+        const isOff = schedule && schedule.status === '休み';
+        const counts = countAttendanceForDate(dateStr);
+        const selected = dateStr === selectedDate;
+        const isToday = dateStr === todayStr;
+        const hasItems = !!(schedule && String(schedule.itemsToBring || '').trim());
+        const hasNotice = !!(schedule && String(schedule.description || '').trim());
+
+        let dayColor = 'text-slate-800';
+        if (weekday === 0) dayColor = 'text-rose-600';
+        else if (weekday === 6) dayColor = 'text-blue-600';
+
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.setAttribute('role', 'listitem');
+        card.dataset.date = dateStr;
+        card.className = [
+          'week-day-card snap-start shrink-0 w-[5.75rem] min-h-[7.5rem] rounded-xl border px-2 py-2 text-left transition active:scale-95',
+          'flex flex-col gap-1.5',
+          selected
+            ? 'ring-2 ring-slate-900 border-slate-900 shadow-md bg-white'
+            : (isOff ? 'border-rose-200 bg-rose-50/70 hover:bg-rose-50' : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300')
+        ].join(' ');
+
+        const dateLine = document.createElement('div');
+        dateLine.className = `text-[11px] font-black leading-tight ${dayColor}`;
+        dateLine.textContent = `${day.getMonth() + 1}/${day.getDate()} (${WEEKDAY_LABELS[weekday]})`;
+        card.appendChild(dateLine);
+
+        if (isToday) {
+          const todayBadge = document.createElement('span');
+          todayBadge.className = 'inline-flex self-start text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-900 text-white';
+          todayBadge.textContent = '今日';
+          card.appendChild(todayBadge);
+        }
+
+        const status = document.createElement('div');
+        status.className = `text-[11px] font-bold leading-snug ${isOff ? 'text-rose-700' : 'text-emerald-700'}`;
+        status.textContent = isOff ? '🚫 休み' : '🟢 通常';
+        card.appendChild(status);
+
+        if (!isOff && (counts.attend > 0 || counts.absent > 0)) {
+          const countLine = document.createElement('div');
+          countLine.className = 'text-[10px] font-black text-slate-700 leading-snug';
+          countLine.textContent = `⭕ ${counts.attend}名 / ❌ ${counts.absent}名`;
+          card.appendChild(countLine);
+        }
+
+        if (hasItems || hasNotice) {
+          const icons = document.createElement('div');
+          icons.className = 'mt-auto flex items-center gap-1 text-sm leading-none';
+          if (hasNotice) {
+            const noticeIcon = document.createElement('span');
+            noticeIcon.setAttribute('aria-label', '連絡事項あり');
+            noticeIcon.textContent = '📢';
+            icons.appendChild(noticeIcon);
+          }
+          if (hasItems) {
+            const itemsIcon = document.createElement('span');
+            itemsIcon.setAttribute('aria-label', '特別な持ち物あり');
+            itemsIcon.textContent = '🎒';
+            icons.appendChild(itemsIcon);
+          }
+          card.appendChild(icons);
+        }
+
+        card.addEventListener('click', () => selectDashboardDate(dateStr));
+        strip.appendChild(card);
+      }
+    }
 
     function renderDashboard() {
       const selectedDate = document.getElementById('targetDatePicker').value;
@@ -698,6 +813,8 @@
         absentListEl.innerHTML = '';
         absents.forEach(item => absentListEl.appendChild(createMemberCard(item)));
       }
+
+      renderWeekSummary();
     }
 
     function createMemberCard(item) {
