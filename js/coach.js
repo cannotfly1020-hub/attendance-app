@@ -1,8 +1,20 @@
 const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
-const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
-const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
+const COACH_TITLE = "コーチ"; // 指導者の呼び名（未設定時の初期値）
 let activeClubName = CLUB_NAME;
-document.title = `【${COACH_TITLE}専用】出欠＆練習予定ダッシュボード`;
+let activeCoachTitle = COACH_TITLE;
+
+function getDefaultAnnouncementTitle() {
+  return `${activeCoachTitle}からのおしらせ`;
+}
+
+function isDefaultAnnouncementTitle(title) {
+  const t = String(title || '').trim();
+  if (!t) return true;
+  if (t === getDefaultAnnouncementTitle()) return true;
+  return ['コーチ', '指導者', '先生', 'リーダー', '代表', '監督'].some(role => t === `${role}からのおしらせ`);
+}
+
+document.title = `【${activeCoachTitle}専用】出欠＆練習予定ダッシュボード`;
 document.getElementById('coachClubName').textContent = CLUB_NAME;
 document.getElementById('coachPortalTitle').textContent = '出欠＆練習予定ダッシュボード';
 
@@ -24,16 +36,49 @@ function timestampText(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-function updateClubNameDisplay(name) {
-  const next = String(name || '').trim() || CLUB_NAME;
-  activeClubName = next;
-  document.getElementById('coachClubName').textContent = next;
-  const input = document.getElementById('clubNameInput');
-  if (input && document.activeElement !== input) input.value = next;
+function refreshAnnounceSuggestions() {
+  const announceList = document.getElementById('announceSuggestions');
+  if (!announceList) return;
+  announceList.innerHTML = '';
+  [getDefaultAnnouncementTitle(), '指導者より', '保護者会より', '当番より', '緊急連絡'].forEach(label => {
+    const option = document.createElement('option');
+    option.value = label;
+    announceList.appendChild(option);
+  });
+}
+
+function updateAppSettingsDisplay(settings) {
+  const nextClub = String((settings && settings.clubName) || '').trim() || CLUB_NAME;
+  const nextTitle = String((settings && settings.coachTitle) || '').trim() || COACH_TITLE;
+  const titleChanged = nextTitle !== activeCoachTitle;
+
+  activeClubName = nextClub;
+  activeCoachTitle = nextTitle;
+
+  document.getElementById('coachClubName').textContent = nextClub;
+  document.title = `【${nextTitle}専用】出欠＆練習予定ダッシュボード`;
+
+  const clubInput = document.getElementById('clubNameInput');
+  if (clubInput && document.activeElement !== clubInput) clubInput.value = nextClub;
+  const titleInput = document.getElementById('coachTitleInput');
+  if (titleInput && document.activeElement !== titleInput) titleInput.value = nextTitle;
+
+  refreshAnnounceSuggestions();
+
+  const announceInput = document.getElementById('schAnnounceInput');
+  if (announceInput && document.activeElement !== announceInput) {
+    const current = String(announceInput.value || '').trim();
+    if (!current || isDefaultAnnouncementTitle(current)) {
+      announceInput.value = getDefaultAnnouncementTitle();
+    }
+  }
+
+  if (titleChanged) renderDashboard();
 }
 
 function openClubNameModal() {
   document.getElementById('clubNameInput').value = activeClubName;
+  document.getElementById('coachTitleInput').value = activeCoachTitle;
   const modal = document.getElementById('clubNameModal');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -47,7 +92,7 @@ function closeClubNameModal() {
 }
 
 function startLiveSync() {
-  subscribeClubName(updateClubNameDisplay);
+  subscribeAppSettings(updateAppSettingsDisplay);
 
   db.collection('schedules').onSnapshot((snap) => {
     const next = {};
@@ -399,12 +444,12 @@ function renderDashboard() {
       currentScheduleStatus = schedule.status;
       document.getElementById('schDescInput').value = schedule.description || '';
       document.getElementById('schItemsInput').value = schedule.itemsToBring || '';
-      document.getElementById('schAnnounceInput').value = schedule.announcementTitle || DEFAULT_ANNOUNCEMENT_TITLE;
+      document.getElementById('schAnnounceInput').value = schedule.announcementTitle || getDefaultAnnouncementTitle();
     } else {
       currentScheduleStatus = '通常練習';
       document.getElementById('schDescInput').value = '';
       document.getElementById('schItemsInput').value = '';
-      document.getElementById('schAnnounceInput').value = DEFAULT_ANNOUNCEMENT_TITLE;
+      document.getElementById('schAnnounceInput').value = getDefaultAnnouncementTitle();
     }
   }
   updateScheduleUI();
@@ -454,25 +499,61 @@ function createMemberCard(item) {
   } else if (item.source === 'student') {
     sourceLabel = '<span class="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-bold">本人</span>';
   } else if (item.source === 'coach') {
-    sourceLabel = `<span class="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold">${COACH_TITLE}</span>`;
+    sourceLabel = `<span class="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold">${activeCoachTitle}</span>`;
   }
-
-  const noteBlock = item.note 
-    ? `<div class="text-xs bg-amber-50 text-amber-900 border border-amber-200 px-2 py-1 rounded mt-1 font-medium">💬 ${item.note}</div>`
-    : '';
 
   el.innerHTML = `
     <div class="flex flex-wrap items-center justify-between gap-1 min-w-0">
       <div class="flex flex-wrap items-center gap-1.5 min-w-0">
-        <span class="text-sm font-bold text-slate-800 break-words">${item.name}</span>
+        <span class="text-sm font-bold text-slate-800 break-words"></span>
         ${sourceLabel}
       </div>
-      <div class="flex items-center gap-0.5 shrink-0">
+      <div class="flex items-center gap-0.5 shrink-0 card-actions">
         <span class="text-[10px] text-slate-400">${item.updatedAt ? item.updatedAt.slice(11, 16) : ''}</span>
       </div>
     </div>
-    ${noteBlock}
   `;
+  el.querySelector('.text-sm.font-bold').textContent = item.name || '';
+
+  const noteText = String(item.note || '').trim();
+  if (noteText) {
+    const noteRow = document.createElement('div');
+    noteRow.className = 'flex flex-wrap items-center gap-1.5 mt-0.5';
+
+    const noteBlock = document.createElement('div');
+    noteBlock.className = 'text-xs bg-amber-50 text-amber-900 border border-amber-200 px-2 py-1 rounded font-medium break-words min-w-0';
+    noteBlock.textContent = `💬 ${noteText}`;
+
+    const readBtn = document.createElement('button');
+    readBtn.type = 'button';
+    const isRead = !!item.isReadByCoach;
+    if (isRead) {
+      readBtn.className = 'shrink-0 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-100 active:scale-95 transition';
+      readBtn.textContent = '✅ 確認済';
+      readBtn.setAttribute('aria-label', '確認を取り消す');
+    } else {
+      readBtn.className = 'shrink-0 text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg hover:bg-amber-50 hover:text-amber-800 hover:border-amber-200 active:scale-95 transition';
+      readBtn.textContent = '👀 確認する';
+      readBtn.setAttribute('aria-label', '連絡事項を確認済みにする');
+    }
+    readBtn.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const docId = item.docId || `${item.normalizedName || normalizeName(item.name)}_${normalizeDateKey(item.date)}`;
+      const nextChecked = !item.isReadByCoach;
+      readBtn.disabled = true;
+      try {
+        await setAttendanceNoteReadByCoach(docId, nextChecked);
+        showToast(nextChecked ? `${item.name}さんの連絡事項を確認しました` : '確認を取り消しました');
+      } catch (err) {
+        console.error(err);
+        readBtn.disabled = false;
+        showToast('確認状態の更新に失敗しました。通信環境を確認してください。', true);
+      }
+    });
+
+    noteRow.append(noteBlock, readBtn);
+    el.appendChild(noteRow);
+  }
 
   const deleteBtn = document.createElement('button');
   deleteBtn.type = 'button';
@@ -483,7 +564,7 @@ function createMemberCard(item) {
     event.stopPropagation();
     handleDeleteAttendanceItem(item, deleteBtn);
   });
-  el.querySelector('.shrink-0').appendChild(deleteBtn);
+  el.querySelector('.card-actions').appendChild(deleteBtn);
   return el;
 }
 
@@ -529,31 +610,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.target.id === 'clubNameModal') closeClubNameModal();
   });
   document.getElementById('saveClubNameBtn').addEventListener('click', async () => {
-    const val = document.getElementById('clubNameInput').value.trim();
-    if (!val) {
+    const clubVal = document.getElementById('clubNameInput').value.trim();
+    const titleVal = document.getElementById('coachTitleInput').value.trim();
+    if (!clubVal) {
       showToast('教室名を入力してください。', true);
+      return;
+    }
+    if (!titleVal) {
+      showToast('指導者の呼称を入力してください。', true);
       return;
     }
     const button = document.getElementById('saveClubNameBtn');
     button.disabled = true;
     try {
-      await updateClubName(val);
-      showToast('教室名を更新しました！');
+      await updateAppSettings({ clubName: clubVal, coachTitle: titleVal });
+      showToast('教室名・呼称を更新しました！');
       closeClubNameModal();
     } catch (err) {
       console.error(err);
-      showToast('教室名の保存に失敗しました。通信環境を確認してください。', true);
+      showToast('設定の保存に失敗しました。通信環境を確認してください。', true);
     } finally {
       button.disabled = false;
     }
   });
 
-  const announceList = document.getElementById('announceSuggestions');
-  [DEFAULT_ANNOUNCEMENT_TITLE, '指導者より', '保護者会より', '当番より', '緊急連絡'].forEach(label => {
-    const option = document.createElement('option');
-    option.value = label;
-    announceList.appendChild(option);
-  });
+  refreshAnnounceSuggestions();
 
   const picker = document.getElementById('targetDatePicker');
   picker.value = formatDate(new Date());
@@ -647,7 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!sourceDate) return;
       const desc = document.getElementById('schDescInput').value.trim();
       const items = document.getElementById('schItemsInput').value.trim();
-      const announcementTitle = document.getElementById('schAnnounceInput').value.trim() || DEFAULT_ANNOUNCEMENT_TITLE;
+      const announcementTitle = document.getElementById('schAnnounceInput').value.trim() || getDefaultAnnouncementTitle();
       const status = currentScheduleStatus;
       const isNextWeek = option.dataset.copy === 'next-week';
       const targets = isNextWeek
@@ -686,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const date = picker.value;
     const desc = document.getElementById('schDescInput').value.trim();
     const items = document.getElementById('schItemsInput').value.trim();
-    const announcementTitle = document.getElementById('schAnnounceInput').value.trim() || DEFAULT_ANNOUNCEMENT_TITLE;
+    const announcementTitle = document.getElementById('schAnnounceInput').value.trim() || getDefaultAnnouncementTitle();
     const btn = document.getElementById('saveScheduleBtn');
 
     btn.disabled = true;

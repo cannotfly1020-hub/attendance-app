@@ -1,11 +1,30 @@
 const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
-const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
-const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
+const COACH_TITLE = "コーチ"; // 指導者の呼び名（未設定時の初期値）
+let activeCoachTitle = COACH_TITLE;
+
+function getDefaultAnnouncementTitle() {
+  return `${activeCoachTitle}からのおしらせ`;
+}
+
+function isDefaultAnnouncementTitle(title) {
+  const t = String(title || '').trim();
+  if (!t) return true;
+  if (t === getDefaultAnnouncementTitle()) return true;
+  return ['コーチ', '指導者', '先生', 'リーダー', '代表', '監督'].some(role => t === `${role}からのおしらせ`);
+}
 
 function updateClubNameDisplay(name) {
   const next = String(name || '').trim() || CLUB_NAME;
   document.title = `【保護者用】${next} 出欠管理ポータル`;
   document.getElementById('parentPortalTitle').textContent = `${next} 保護者ポータル`;
+}
+
+function updateAppSettingsDisplay(settings) {
+  const nextClub = String((settings && settings.clubName) || '').trim() || CLUB_NAME;
+  const nextTitle = String((settings && settings.coachTitle) || '').trim() || COACH_TITLE;
+  activeCoachTitle = nextTitle;
+  updateClubNameDisplay(nextClub);
+  refreshParentViews();
 }
 
 updateClubNameDisplay(CLUB_NAME);
@@ -214,7 +233,7 @@ function refreshParentViews() {
 }
 
 function startLiveSync() {
-  subscribeClubName(updateClubNameDisplay);
+  subscribeAppSettings(updateAppSettingsDisplay);
 
   db.collection('schedules').onSnapshot((snap) => {
     const next = {};
@@ -295,7 +314,7 @@ function renderUpcomingNotice() {
     const description = (schedule.description || '').trim();
     const items = (schedule.itemsToBring || '').trim();
     const announce = (schedule.announcementTitle || '').trim();
-    const customAnnounce = announce && announce !== DEFAULT_ANNOUNCEMENT_TITLE;
+    const customAnnounce = announce && !isDefaultAnnouncementTitle(announce);
     if (!off && !description && !items && !customAnnounce) continue;
     picks.push({
       label: offset === 0 ? '今日' : '明日',
@@ -409,13 +428,13 @@ function renderList() {
 
     let announceBadge = '';
     const announce = schedule && String(schedule.announcementTitle || '').trim();
-    if (announce && announce !== DEFAULT_ANNOUNCEMENT_TITLE) {
+    if (announce && !isDefaultAnnouncementTitle(announce)) {
       announceBadge = `<span class="bg-purple-100 text-purple-800 text-[10px] px-1.5 py-0.5 rounded font-bold">${escapeHtml(announce)}</span>`;
     }
 
     let coachBadge = '';
     if (record && record.source === 'coach') {
-      coachBadge = `<span class="inline-flex items-center text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold">${COACH_TITLE}</span>`;
+      coachBadge = `<span class="inline-flex items-center text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold">${escapeHtml(activeCoachTitle)}</span>`;
     }
 
     let selfEntryBadge = '';
@@ -432,7 +451,7 @@ function renderList() {
           ${coachBadge}
         </div>
         ${descLine}
-        ${record && record.note ? `<div class="text-xs text-slate-500 font-medium mt-0.5 break-words">💬 連絡事項: ${escapeHtml(record.note)}</div>` : ''}
+        ${record && record.note ? `<div class="text-xs text-slate-500 font-medium mt-0.5 break-words flex flex-wrap items-center gap-1.5">💬 連絡事項: ${escapeHtml(record.note)}${record.isReadByCoach ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">🟢 ${escapeHtml(activeCoachTitle)}確認済</span>` : ''}</div>` : ''}
       </div>
       <div class="shrink-0 max-w-full flex flex-wrap items-center justify-start sm:justify-end gap-1.5">${statusBadge}${selfEntryBadge}</div>
     `;
@@ -454,14 +473,14 @@ function openModal(dateStr, currentRecord, schedule) {
   const notice = document.getElementById('modalScheduleNotice');
   notice.replaceChildren();
   const items = schedule && schedule.itemsToBring ? String(schedule.itemsToBring).trim() : '';
-  const announce = schedule ? (String(schedule.announcementTitle || '').trim() || DEFAULT_ANNOUNCEMENT_TITLE) : '';
+  const announce = schedule ? (String(schedule.announcementTitle || '').trim() || getDefaultAnnouncementTitle()) : '';
   const appendSender = () => {
     if (!announce) return;
     const sender = document.createElement('div');
-    sender.className = announce === DEFAULT_ANNOUNCEMENT_TITLE
+    sender.className = isDefaultAnnouncementTitle(announce)
       ? 'font-black text-sm leading-snug break-words'
       : 'inline-flex bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded font-black';
-    sender.textContent = `📢 ${announce}`;
+    sender.textContent = `📢 ${isDefaultAnnouncementTitle(announce) ? getDefaultAnnouncementTitle() : announce}`;
     notice.prepend(sender);
   };
   const appendItemsWarning = () => {
@@ -495,7 +514,7 @@ function openModal(dateStr, currentRecord, schedule) {
     notice.appendChild(body);
     appendItemsWarning();
     appendSender();
-  } else if (items || (announce && announce !== DEFAULT_ANNOUNCEMENT_TITLE)) {
+  } else if (items || (announce && !isDefaultAnnouncementTitle(announce))) {
     notice.className = items
       ? 'rounded-xl border-2 border-amber-400 bg-amber-100 text-amber-950 p-3 space-y-2'
       : 'rounded-xl border-2 border-purple-300 bg-purple-50 text-purple-950 p-3 space-y-2';

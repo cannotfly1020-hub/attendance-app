@@ -118,11 +118,23 @@
 
   <script>
     const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
-    const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
-    const DEFAULT_ANNOUNCEMENT_TITLE = `${COACH_TITLE}からのおしらせ`;
+    const COACH_TITLE = "コーチ"; // 指導者の呼び名（未設定時の初期値）
+    let activeCoachTitle = COACH_TITLE;
+
+    function getDefaultAnnouncementTitle() {
+      return `${activeCoachTitle}からのおしらせ`;
+    }
+
+    function isDefaultAnnouncementTitle(title) {
+      const t = String(title || '').trim();
+      if (!t) return true;
+      if (t === getDefaultAnnouncementTitle()) return true;
+      return ['コーチ', '指導者', '先生', 'リーダー', '代表', '監督'].some(role => t === `${role}からのおしらせ`);
+    }
+
     document.title = `【生徒用】${CLUB_NAME} れんしゅう出欠チェック`;
     document.getElementById('studentClubName').textContent = CLUB_NAME;
-    document.getElementById('studentScheduleTitle').textContent = `${COACH_TITLE}からのおしらせ`;
+    document.getElementById('studentScheduleTitle').textContent = getDefaultAnnouncementTitle();
 
     const STORAGE_KEY_STUDENT = 'sports_app_student_kid';
 
@@ -172,14 +184,17 @@
       renderScheduleBanner();
     }
 
-    function updateClubNameDisplay(name) {
-      const next = String(name || '').trim() || CLUB_NAME;
-      document.title = `【生徒用】${next} れんしゅう出欠チェック`;
-      document.getElementById('studentClubName').textContent = next;
+    function updateAppSettingsDisplay(settings) {
+      const nextClub = String((settings && settings.clubName) || '').trim() || CLUB_NAME;
+      const nextTitle = String((settings && settings.coachTitle) || '').trim() || COACH_TITLE;
+      activeCoachTitle = nextTitle;
+      document.title = `【生徒用】${nextClub} れんしゅう出欠チェック`;
+      document.getElementById('studentClubName').textContent = nextClub;
+      renderScheduleBanner();
     }
 
     function startLiveSync() {
-      subscribeClubName(updateClubNameDisplay);
+      subscribeAppSettings(updateAppSettingsDisplay);
 
       db.collection('schedules').onSnapshot(applyScheduleSnapshot, (err) => {
         console.error(err);
@@ -382,7 +397,7 @@
       if (!schedulesReady) {
         banner.className = 'p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/80 text-amber-900 shadow-sm';
         title.className = 'font-black text-sm';
-        title.textContent = DEFAULT_ANNOUNCEMENT_TITLE;
+        title.textContent = getDefaultAnnouncementTitle();
         body.className = 'text-sm mt-1 leading-relaxed';
         body.textContent = 'よみこみちゅう...';
         updateStudentActionButtons();
@@ -399,8 +414,11 @@
         return;
       }
 
-      if (schedule && (schedule.description || (String(schedule.announcementTitle || '').trim() && String(schedule.announcementTitle).trim() !== DEFAULT_ANNOUNCEMENT_TITLE))) {
-        const heading = String(schedule.announcementTitle || '').trim() || DEFAULT_ANNOUNCEMENT_TITLE;
+      const rawAnnounce = schedule ? String(schedule.announcementTitle || '').trim() : '';
+      if (schedule && (schedule.description || (rawAnnounce && !isDefaultAnnouncementTitle(rawAnnounce)))) {
+        const heading = (rawAnnounce && !isDefaultAnnouncementTitle(rawAnnounce))
+          ? rawAnnounce
+          : getDefaultAnnouncementTitle();
         banner.className = 'p-4 rounded-2xl border-2 bg-blue-50 border-blue-300 text-blue-950 shadow-sm';
         title.className = 'font-black text-base leading-snug';
         title.textContent = `📢 ${heading}`;

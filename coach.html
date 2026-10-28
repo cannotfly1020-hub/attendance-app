@@ -241,13 +241,27 @@
   <div id="clubNameModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
     <div class="bg-white w-full max-w-md shrink-0 rounded-2xl p-5 space-y-4 shadow-xl">
       <div class="flex justify-between items-center border-b pb-2">
-        <h3 class="font-bold text-slate-800 text-sm">教室名の設定</h3>
+        <h3 class="font-bold text-slate-800 text-sm">教室名・呼称の設定</h3>
         <button type="button" id="closeClubNameBtn" class="text-slate-400 hover:text-slate-600 text-lg leading-none font-bold min-h-[44px] min-w-[44px]" aria-label="閉じる">&times;</button>
       </div>
       <div>
         <label for="clubNameInput" class="block text-xs font-semibold text-slate-500 mb-1">教室名・クラブ名</label>
         <input type="text" id="clubNameInput" placeholder="例: わんぱく体操クラブ"
           class="w-full min-w-0 border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold">
+      </div>
+      <div>
+        <label for="coachTitleInput" class="block text-xs font-semibold text-slate-500 mb-1">指導者の呼称（生徒・保護者画面での呼び名）</label>
+        <input type="text" id="coachTitleInput" list="coachTitleSuggestions" placeholder="例: 先生 / 指導者 / リーダー / 代表"
+          class="w-full min-w-0 border border-slate-300 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold" autocomplete="off">
+        <datalist id="coachTitleSuggestions">
+          <option value="先生"></option>
+          <option value="指導者"></option>
+          <option value="リーダー"></option>
+          <option value="代表"></option>
+          <option value="監督"></option>
+          <option value="コーチ"></option>
+        </datalist>
+        <p class="text-[11px] text-slate-400 mt-1.5 leading-relaxed">※「🟢 先生確認済」「先生からのおしらせ」など全画面の表記に反映されます</p>
       </div>
       <button type="button" id="saveClubNameBtn" class="w-full min-h-[48px] bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl active:scale-95 transition">
         保存して反映

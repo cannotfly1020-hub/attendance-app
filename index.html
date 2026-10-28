@@ -162,25 +162,27 @@
 
   <script>
     const CLUB_NAME = "運動教室"; // 教室名・クラブ名（未設定時の初期値）
-    const COACH_TITLE = "コーチ"; // 指導者の呼び名（「コーチ」「指導者」「リーダー」「先生」等）
+    const COACH_TITLE = "コーチ"; // 指導者の呼び名（未設定時の初期値）
 
-    function updateClubNameDisplay(name) {
-      const next = String(name || '').trim() || CLUB_NAME;
-      document.title = `${next} 出欠管理ポータル`;
-      document.getElementById('portalTitle').textContent = `${next} 出欠管理ポータル`;
+    function updateAppSettingsDisplay(settings) {
+      const nextClub = String((settings && settings.clubName) || '').trim() || CLUB_NAME;
+      const nextTitle = String((settings && settings.coachTitle) || '').trim() || COACH_TITLE;
+      document.title = `${nextClub} 出欠管理ポータル`;
+      document.getElementById('portalTitle').textContent = `${nextClub} 出欠管理ポータル`;
+      document.getElementById('coachRoleLabel').textContent = `${nextTitle}専用`;
       const studentLine = document.querySelector('[data-action="line"][data-file="student.html"]');
       const parentLine = document.querySelector('[data-action="line"][data-file="parent.html"]');
       if (studentLine) {
-        studentLine.dataset.message = `【${next}】生徒用出欠送信ページです。こちらから出欠を入力してください！`;
+        studentLine.dataset.message = `【${nextClub}】生徒用出欠送信ページです。こちらから出欠を入力してください！`;
       }
       if (parentLine) {
-        parentLine.dataset.message = `【${next}】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。`;
+        parentLine.dataset.message = `【${nextClub}】保護者用出欠・予定確認ポータルです。予定の確認や出欠登録はこちらからお願いいたします。`;
       }
     }
 
     document.getElementById('coachRoleLabel').textContent = `${COACH_TITLE}専用`;
-    updateClubNameDisplay(CLUB_NAME); // 未取得時は「運動教室」
-    subscribeClubName(updateClubNameDisplay);
+    updateAppSettingsDisplay({ clubName: CLUB_NAME, coachTitle: COACH_TITLE });
+    subscribeAppSettings(updateAppSettingsDisplay);
 
     function getFullTargetUrl(fileName) {
       const loc = window.location.href.split('?')[0].split('#')[0];
