@@ -334,6 +334,9 @@ function countAttendanceForDate(dateStr) {
   return { attend, absent };
 }
 
+const SUMMARY_DAY_COUNT = 30;
+let lastSummaryScrollDate = '';
+
 function selectDashboardDate(dateStr) {
   const next = normalizeDateKey(dateStr);
   if (!next) return;
@@ -341,7 +344,23 @@ function selectDashboardDate(dateStr) {
   if (picker.value !== next) {
     picker.value = next;
   }
+  // 日付切替時は必ずサマリー側も追従スクロール
+  lastSummaryScrollDate = '';
   renderDashboard();
+}
+
+function scrollSummaryToSelectedDate() {
+  const strip = document.getElementById('weekSummaryStrip');
+  if (!strip) return;
+  const selectedDate = normalizeDateKey(document.getElementById('targetDatePicker').value);
+  if (!selectedDate) return;
+  if (selectedDate === lastSummaryScrollDate) return;
+  lastSummaryScrollDate = selectedDate;
+  const card = strip.querySelector(`.week-day-card[data-date="${selectedDate}"]`);
+  if (!card) return;
+  requestAnimationFrame(() => {
+    card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  });
 }
 
 function renderWeekSummary() {
@@ -352,7 +371,7 @@ function renderWeekSummary() {
   const todayStr = formatDate(new Date());
   strip.replaceChildren();
 
-  for (let offset = 0; offset < 7; offset++) {
+  for (let offset = 0; offset < SUMMARY_DAY_COUNT; offset++) {
     const day = new Date();
     day.setHours(12, 0, 0, 0);
     day.setDate(day.getDate() + offset);
@@ -374,6 +393,7 @@ function renderWeekSummary() {
     card.type = 'button';
     card.setAttribute('role', 'listitem');
     card.dataset.date = dateStr;
+    if (selected) card.setAttribute('aria-current', 'date');
     card.className = [
       'week-day-card snap-start shrink-0 w-[5.75rem] min-h-[7.5rem] rounded-xl border px-2 py-2 text-left transition active:scale-95',
       'flex flex-col gap-1.5',
@@ -427,6 +447,8 @@ function renderWeekSummary() {
     card.addEventListener('click', () => selectDashboardDate(dateStr));
     strip.appendChild(card);
   }
+
+  scrollSummaryToSelectedDate();
 }
 
 function renderDashboard() {
@@ -639,14 +661,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const picker = document.getElementById('targetDatePicker');
   picker.value = formatDate(new Date());
 
-  picker.addEventListener('change', renderDashboard);
+  picker.addEventListener('change', () => {
+    lastSummaryScrollDate = '';
+    renderDashboard();
+  });
 
   document.getElementById('setTodayBtn').addEventListener('click', () => {
+    lastSummaryScrollDate = '';
     picker.value = formatDate(new Date());
     renderDashboard();
   });
 
   document.getElementById('setTomorrowBtn').addEventListener('click', () => {
+    lastSummaryScrollDate = '';
     const d = new Date();
     d.setDate(d.getDate() + 1);
     picker.value = formatDate(d);

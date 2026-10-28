@@ -58,6 +58,21 @@
     header {
       padding-top: env(safe-area-inset-top);
     }
+    #weekSummaryStrip {
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+    #weekSummaryStrip::-webkit-scrollbar {
+      height: 4px;
+    }
+    #weekSummaryStrip::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+    #weekSummaryStrip::-webkit-scrollbar-track {
+      background: transparent;
+    }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen pb-16 overflow-x-hidden w-full font-sans">
@@ -197,12 +212,15 @@
       </div>
     </section>
 
-    <!-- 向こう1週間の予定・出欠サマリー -->
+    <!-- 向こう1ヶ月の予定・出欠サマリー -->
     <section class="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-      <h2 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-        <span>📅</span> 向こう1週間の予定・出欠
-      </h2>
-      <div id="weekSummaryStrip" class="flex gap-2 overflow-x-auto pb-1 w-full min-w-0 snap-x snap-mandatory" role="list"></div>
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-sm font-bold text-slate-800 flex items-center gap-1.5 min-w-0">
+          <span>📅</span> 向こう1ヶ月の予定・出欠
+        </h2>
+        <span class="text-[10px] text-slate-400 font-medium shrink-0">横にスクロール</span>
+      </div>
+      <div id="weekSummaryStrip" class="flex gap-2 overflow-x-auto pb-2 pt-1 w-full min-w-0 snap-x snap-mandatory scroll-smooth" role="list" aria-label="向こう30日間の予定・出欠サマリー"></div>
     </section>
 
     <!-- 出席者・欠席者リスト -->
